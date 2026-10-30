@@ -29,6 +29,7 @@ def _seed_repo(email: str = "one@example.com"):
         connected=True,
     )
     db.add(repo)
+    db.flush()
     issue = DetectedIssue(
         id=new_id(),
         organization_id=member.organization_id,

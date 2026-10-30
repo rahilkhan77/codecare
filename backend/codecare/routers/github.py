@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from codecare.config import get_settings
 from codecare.db import get_db
-from codecare.deps import AuthContext, current_auth, org_scoped
+from codecare.deps import AuthContext, current_auth, org_scoped, require_roles
 from codecare.models import GithubInstallation, GithubWebhookEvent, OauthState, Repository, RepositoryScan, new_id, utcnow
 from codecare.schemas import ConnectReposRequest
 from codecare.security import verify_github_signature
@@ -19,6 +19,7 @@ from codecare.services import github as gh
 from codecare.services.audit import audit
 from codecare.services.entitlements import assert_repo_quota
 from codecare.services.jobs import enqueue, has_active_job
+from codecare.services.github_login import finish_github_sign_in
 from codecare.services.oauth import apply_oauth_payload, clear_oauth_credentials, oauth_snapshot, revoke_and_clear
 
 router = APIRouter(tags=["github"])
@@ -40,7 +41,7 @@ def github_status(auth: AuthContext = Depends(current_auth), db: Session = Depen
 
 
 @router.get("/api/v1/github/install-url")
-def install_url(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def install_url(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     settings = get_settings()
     if not settings.github_configured:
         raise HTTPException(status_code=503, detail="GitHub App is not configured on the server")
@@ -53,7 +54,7 @@ def install_url(auth: AuthContext = Depends(current_auth), db: Session = Depends
 
 
 @router.get("/api/v1/github/oauth/start")
-def oauth_start(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def oauth_start(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     settings = get_settings()
     if not settings.github_app_client_id:
         raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
@@ -83,7 +84,13 @@ def _consume_state(db: Session, state: str) -> OauthState:
 @router.get("/api/v1/github/oauth/callback")
 async def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     row = _consume_state(db, state)
-    token_data = await gh.exchange_oauth_code(code)
+    settings = get_settings()
+    redirect_uri = None
+    if row.purpose == "login":
+        redirect_uri = settings.public_base_url.rstrip("/") + "/api/v1/github/oauth/callback"
+    token_data = await gh.exchange_oauth_code(code, redirect_uri=redirect_uri)
+    if row.purpose == "login":
+        return await finish_github_sign_in(db, token_data)
     try:
         user = await gh.github_user(token_data["access_token"])
     except gh.GitHubError as exc:
@@ -156,7 +163,7 @@ async def available_repos(auth: AuthContext = Depends(current_auth), db: Session
 
 
 @router.post("/api/v1/github/repos/connect")
-async def connect_repos(payload: ConnectReposRequest, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+async def connect_repos(payload: ConnectReposRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     installation = db.scalar(select(GithubInstallation).where(GithubInstallation.organization_id == auth.organization_id))
     if not installation or installation.installation_id.startswith("pending-"):
         raise HTTPException(status_code=400, detail="Install the GitHub App first")
@@ -203,7 +210,7 @@ async def connect_repos(payload: ConnectReposRequest, auth: AuthContext = Depend
 
 
 @router.post("/api/v1/github/oauth/revoke")
-async def oauth_revoke(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+async def oauth_revoke(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     installation = db.scalar(select(GithubInstallation).where(GithubInstallation.organization_id == auth.organization_id))
     if not installation or not installation.encrypted_user_token:
         raise HTTPException(status_code=400, detail="No GitHub user token is stored")
@@ -214,7 +221,7 @@ async def oauth_revoke(auth: AuthContext = Depends(current_auth), db: Session = 
 
 
 @router.post("/api/v1/github/repos/{repo_id}/disconnect")
-def disconnect_repo(repo_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def disconnect_repo(repo_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     repo = org_scoped(Repository, repo_id, auth, db)
     repo.connected = False
     audit(db, action="github.repos.disconnect", organization_id=auth.organization_id, profile_id=auth.profile.id, target_id=repo.id)

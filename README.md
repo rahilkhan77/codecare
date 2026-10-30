@@ -27,8 +27,8 @@ $env:PYTHONPATH = (Get-Location).Path
 uvicorn codecare.main:app --reload --port 8000
 ```
 
-Open http://127.0.0.1:8000/ for the site and http://127.0.0.1:8000/workspace/ to register a workspace.
+Open http://127.0.0.1:8000/ for the site and http://127.0.0.1:8000/workspace/login.html to sign in. The production site is https://codecare.si.
 
 GitHub, Stripe, hosted AI, and sandbox verification stay disabled until the matching environment variables are set. The product does not report those integrations as successful without credentials.
 
-Replace the site-domain placeholder in `sitemap.xml` and complete the legal-page placeholders before publishing.
+Public URLs in the sitemap, robots file, and page metadata use https://codecare.si. Legal pages still mark the operating company, dates, and jurisdiction as drafts for counsel.

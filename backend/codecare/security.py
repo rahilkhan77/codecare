@@ -29,16 +29,64 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode(), password_hash.encode())
 
 
-def create_session_token(profile_id: str, organization_id: str, settings: Settings | None = None) -> str:
+def create_session_token(
+    profile_id: str,
+    organization_id: str,
+    settings: Settings | None = None,
+    *,
+    session_id: str,
+    expires_at: datetime | None = None,
+) -> str:
     settings = settings or get_settings()
     now = datetime.now(timezone.utc)
+    exp = expires_at or (now + timedelta(hours=settings.session_hours))
     payload = {
         "sub": profile_id,
         "org": organization_id,
+        "sid": session_id,
         "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(hours=settings.session_hours)).timestamp()),
+        "exp": int(exp.timestamp()),
     }
     return jwt.encode(payload, settings.app_secret, algorithm="HS256")
+
+
+def cookie_security(settings: Settings) -> dict:
+    options = {
+        "secure": settings.app_env == "production",
+        "samesite": "lax",
+        "path": "/",
+    }
+    domain = (settings.cookie_domain or "").strip()
+    if domain:
+        options["domain"] = domain
+    return options
+
+
+def apply_session_cookie(response, token: str, settings: Settings | None = None) -> None:
+    settings = settings or get_settings()
+    response.set_cookie(
+        settings.cookie_name,
+        token,
+        httponly=True,
+        max_age=settings.session_hours * 3600,
+        **cookie_security(settings),
+    )
+
+
+def clear_session_cookie(response, settings: Settings | None = None) -> None:
+    settings = settings or get_settings()
+    response.delete_cookie(settings.cookie_name, **cookie_security(settings))
+
+
+def apply_csrf_cookie(response, token: str, settings: Settings | None = None) -> None:
+    settings = settings or get_settings()
+    response.set_cookie(
+        settings.csrf_cookie_name,
+        token,
+        httponly=False,
+        max_age=settings.session_hours * 3600,
+        **cookie_security(settings),
+    )
 
 
 def decode_session_token(token: str, settings: Settings | None = None) -> dict:

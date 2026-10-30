@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://[SITE-DOMAIN-TO-BE-CONFIRMED]/sitemap.xml
+Sitemap: https://codecare.si/sitemap.xml

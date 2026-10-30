@@ -40,7 +40,7 @@ PostgreSQL is the system of record. Redis is optional. Docker is required for ve
 
 | Module | Responsibility |
 | --- | --- |
-| Authentication | Register/login, httpOnly JWT cookie, optional Supabase JWT exchange |
+| Authentication | Register/login/logout, httpOnly session cookie, CSRF token, email verification, password reset, GitHub OAuth sign-in, roles, optional Supabase JWT exchange |
 | Users and organizations | Personal organization on signup, membership, tenant isolation |
 | GitHub | App install, installation tokens, repo selection, webhooks |
 | Scanning | Tree, languages, manifests, OSV vulns, outdated packages, workflow failures, static findings |

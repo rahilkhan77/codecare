@@ -99,7 +99,12 @@ def settings_get(auth: AuthContext = Depends(current_auth), db: Session = Depend
     installation = db.scalar(select(GithubInstallation).where(GithubInstallation.organization_id == auth.organization_id))
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
     return {
-        "profile": {"email": auth.profile.email, "full_name": auth.profile.full_name},
+        "profile": {
+            "email": auth.profile.email,
+            "full_name": auth.profile.full_name,
+            "email_verified": auth.profile.email_verified_at is not None,
+            "role": auth.role,
+        },
         "organization": {"name": org.name if org else "", "slug": org.slug if org else ""},
         "github": {
             "configured": settings.github_configured,

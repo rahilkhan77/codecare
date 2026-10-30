@@ -74,16 +74,19 @@ async def list_installation_repos(token: str) -> list[dict]:
     return repos
 
 
-async def exchange_oauth_code(code: str, settings: Settings | None = None) -> dict:
+async def exchange_oauth_code(code: str, settings: Settings | None = None, redirect_uri: str | None = None) -> dict:
     settings = settings or get_settings()
+    body = {
+        "client_id": settings.github_app_client_id,
+        "client_secret": settings.github_app_client_secret,
+        "code": code,
+    }
+    if redirect_uri:
+        body["redirect_uri"] = redirect_uri
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.post(
             "https://github.com/login/oauth/access_token",
-            json={
-                "client_id": settings.github_app_client_id,
-                "client_secret": settings.github_app_client_secret,
-                "code": code,
-            },
+            json=body,
             headers={"Accept": "application/json"},
         )
         data = response.json()
@@ -128,6 +131,10 @@ async def revoke_oauth_token(access_token: str, settings: Settings | None = None
 
 async def github_user(token: str) -> dict:
     return await _request("GET", f"{GITHUB_API}/user", token)
+
+
+async def github_emails(token: str) -> list:
+    return await _request("GET", f"{GITHUB_API}/user/emails", token)
 
 
 async def get_repo(token: str, full_name: str) -> dict:

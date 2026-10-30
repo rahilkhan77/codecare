@@ -1,7 +1,7 @@
 # API specification
 
 Base path: `/api/v1`  
-Auth: httpOnly cookie `codecare_session` (JWT) unless noted. CSRF is mitigated with `SameSite=Lax` cookies on same-origin workspace pages.
+Auth: httpOnly cookie `codecare_session` (server-backed session JWT) unless noted. State-changing requests also send `X-CSRF-Token` matching the `codecare_csrf` cookie. Webhooks are exempt and use their own signatures.
 
 All error bodies: `{ "detail": "..." }`.
 
@@ -11,11 +11,41 @@ All error bodies: `{ "detail": "..." }`.
 | --- | --- | --- |
 | GET | `/health` | Liveness and integration flags (booleans only, no secrets) |
 | POST | `/api/v1/contact` | Stores a contact message; rate limited |
-| POST | `/api/v1/auth/register` | Email + password |
-| POST | `/api/v1/auth/login` | Sets session cookie |
-| POST | `/api/v1/auth/logout` | Clears cookie |
+| GET | `/api/v1/auth/csrf` | Sets the readable `codecare_csrf` cookie and returns the token |
+| GET | `/api/v1/auth/providers` | Whether password, GitHub OAuth, and email delivery are configured |
+| POST | `/api/v1/auth/register` | Email + password. Sends a verification link when delivery is available |
+| POST | `/api/v1/auth/login` | Sets the httpOnly `codecare_session` cookie |
+| POST | `/api/v1/auth/logout` | Revokes the server session and clears the cookie |
+| POST | `/api/v1/auth/refresh` | Rotates the current session |
+| POST | `/api/v1/auth/forgot-password` | Always the same shape. Does not claim mail was sent when SMTP is unavailable |
+| POST | `/api/v1/auth/reset-password` | Consumes a reset token and revokes sessions |
+| POST | `/api/v1/auth/verify-email` | Consumes an email verification token |
+| POST | `/api/v1/auth/resend-verification` | Signed-in resend |
+| POST | `/api/v1/auth/change-password` | Current password required when one is set |
+| POST | `/api/v1/auth/delete-account` | Requires confirmation `DELETE` and the password when one exists |
+| POST | `/api/v1/auth/switch-organization` | Session for another membership |
+| POST | `/api/v1/auth/accept-invite` | Accept an invite for the signed-in email |
+| GET | `/api/v1/auth/github/start` | 503 until GitHub OAuth client credentials exist |
 | POST | `/api/v1/auth/supabase` | Exchange a Supabase access token when configured |
-| GET | `/api/v1/auth/me` | Current profile + org |
+| GET | `/api/v1/auth/me` | Profile, role, email verification, and organizations |
+
+State-changing `/api/v1` requests, except signed webhooks, require header `X-CSRF-Token` equal to the `codecare_csrf` cookie.
+
+Roles: `owner` and `admin` can connect repositories, run scans, propose and verify fixes, manage billing, and invite members. `member` is read-only for those actions. Only an `owner` can change roles. Deleting an account that still owns a workspace with other members returns 409.
+
+## Organization
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/v1/org/members` | Members of the current workspace |
+| POST | `/api/v1/org/members` | Add an existing account or email an invite |
+| PATCH | `/api/v1/org/members/{id}` | Owner changes a role |
+| DELETE | `/api/v1/org/members/{id}` | Owner or admin removes a member |
+
+## Billing catalog
+
+| Method | Path | Notes |
+| --- | --- | --- |
 | GET | `/api/v1/billing/plans` | Proposed plan catalog and whether checkout is enabled |
 
 ## Workspace

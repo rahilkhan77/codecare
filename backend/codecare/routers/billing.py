@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from codecare.config import get_settings
 from codecare.db import get_db
-from codecare.deps import AuthContext, current_auth
+from codecare.deps import AuthContext, current_auth, require_roles
 from codecare.models import Subscription, new_id, utcnow
 from codecare.schemas import ChangePlanRequest, CheckoutRequest
 from codecare.services.audit import audit
@@ -43,8 +44,6 @@ def _stripe():
     settings = get_settings()
     if not settings.stripe_configured:
         raise HTTPException(status_code=503, detail="Billing is disabled until Stripe credentials are configured.")
-    import stripe
-
     stripe.api_key = settings.stripe_secret_key
     return stripe, settings
 
@@ -63,12 +62,12 @@ def status(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
         "plan": current_plan(db, auth.organization_id),
         "status": sub.status if sub else "inactive",
         "current_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
-        "cancel_at_period_end": bool(sub and sub.status == "active" and sub.stripe_subscription_id),
+        "cancel_at_period_end": bool(sub and sub.cancel_at_period_end),
     }
 
 
 @router.post("/api/v1/billing/checkout")
-def checkout(payload: CheckoutRequest, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def checkout(payload: CheckoutRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     stripe, settings = _stripe()
     if payload.plan == "enterprise":
         raise HTTPException(status_code=400, detail="Enterprise is custom. Use the contact form.")
@@ -92,7 +91,7 @@ def checkout(payload: CheckoutRequest, auth: AuthContext = Depends(current_auth)
 
 
 @router.post("/api/v1/billing/portal")
-def portal(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def portal(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     stripe, settings = _stripe()
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
     if not sub or not sub.stripe_customer_id:
@@ -105,19 +104,20 @@ def portal(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
 
 
 @router.post("/api/v1/billing/cancel")
-def cancel(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def cancel(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     stripe, _settings = _stripe()
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
     if not sub or not sub.stripe_subscription_id:
         raise HTTPException(status_code=400, detail="No active Stripe subscription to cancel.")
-    stripe.Subscription.modify(sub.stripe_subscription_id, cancel_at_period_end=True)
+    updated = stripe.Subscription.modify(sub.stripe_subscription_id, cancel_at_period_end=True)
+    sub.cancel_at_period_end = bool(updated.get("cancel_at_period_end"))
     audit(db, action="billing.cancel", organization_id=auth.organization_id, profile_id=auth.profile.id)
     db.commit()
     return {"ok": True, "detail": "Cancellation requested at period end. Entitlements follow the Stripe webhook."}
 
 
 @router.post("/api/v1/billing/change-plan")
-def change_plan(payload: ChangePlanRequest, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def change_plan(payload: ChangePlanRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     stripe, settings = _stripe()
     price = _price_map(settings).get(payload.plan)
     if not price:
@@ -164,6 +164,8 @@ def _apply_subscription(db: Session, org_id: str, data: dict, event_type: str) -
         period_end = data.get("current_period_end")
         if period_end:
             sub.current_period_end = datetime.fromtimestamp(int(period_end), tz=timezone.utc)
+        if "cancel_at_period_end" in data:
+            sub.cancel_at_period_end = bool(data.get("cancel_at_period_end"))
         if status in {"canceled", "unpaid", "incomplete_expired"}:
             sub.plan = "none"
             sub.status = "canceled" if status == "canceled" else status
@@ -179,8 +181,6 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     settings = get_settings()
     if not settings.stripe_webhook_secret:
         raise HTTPException(status_code=503, detail="Stripe webhook secret is not configured")
-    import stripe
-
     payload = await request.body()
     sig = request.headers.get("Stripe-Signature", "")
     try:

@@ -94,9 +94,10 @@ if (contactForm) {
 
     status.classList.remove('is-error');
     status.textContent = 'Sending…';
-    fetch('/api/v1/contact', {
+    const sendContact = (token) => fetch('/api/v1/contact', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
       body: JSON.stringify({
         name: contactForm.querySelector('[name="name"]').value,
         email: contactForm.querySelector('[name="email"]').value,
@@ -106,7 +107,7 @@ if (contactForm) {
     }).then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        status.textContent = data.detail || 'The message could not be stored.';
+        status.textContent = typeof data.detail === 'string' ? data.detail : 'The message could not be stored.';
         status.classList.add('is-error');
         return;
       }
@@ -117,6 +118,18 @@ if (contactForm) {
       status.textContent = 'The API is not reachable. Start the CodeCare backend and try again.';
       status.classList.add('is-error');
     });
+    const existing = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('codecare_csrf='));
+    if (existing) {
+      sendContact(decodeURIComponent(existing.slice('codecare_csrf='.length)));
+      return;
+    }
+    fetch('/api/v1/auth/csrf', { credentials: 'include' })
+      .then((response) => response.json())
+      .then((data) => sendContact(data.csrf_token || ''))
+      .catch(() => {
+        status.textContent = 'The API is not reachable. Start the CodeCare backend and try again.';
+        status.classList.add('is-error');
+      });
   });
 }
 

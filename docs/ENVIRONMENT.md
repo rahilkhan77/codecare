@@ -20,7 +20,9 @@ $env:PYTHONPATH = (Get-Location).Path
 uvicorn codecare.main:app --reload --port 8000
 ```
 
-4. Open http://127.0.0.1:8000/ for the marketing site and http://127.0.0.1:8000/workspace/ for the product.
+4. Open http://127.0.0.1:8000/ for the marketing site and http://127.0.0.1:8000/workspace/login.html to sign in.
+
+Production origin is `https://codecare.si`. Set `PUBLIC_BASE_URL=https://codecare.si`, `API_CORS_ORIGINS=https://codecare.si,https://www.codecare.si`, and `COOKIE_DOMAIN=.codecare.si`. Email links, OAuth redirects, and Stripe return URLs use `PUBLIC_BASE_URL`.
 
 SQLite is the default if `DATABASE_URL` is unset or points at sqlite. Use PostgreSQL for anything beyond local trials.
 
@@ -79,6 +81,14 @@ Set `APP_ENV=production`. Startup refuses:
 - Cookies are `Secure` when `APP_ENV=production`.
 - Database backups: `scripts/backup-db.sh`.
 - Liveness: `GET /health`. Readiness (includes database): `GET /readyz`.
+
+## Email
+
+Password reset, email verification, and workspace invites use SMTP when `SMTP_HOST` is set (`SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_TLS`).
+
+In development and test, an empty `SMTP_HOST` prints the message to the API log and records it for tests. In production, an empty `SMTP_HOST` does not send mail and the API says delivery is unavailable.
+
+Suggested production from-address: `CodeCare <noreply@codecare.si>`.
 
 ## Stripe
 

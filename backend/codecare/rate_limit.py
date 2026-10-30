@@ -9,13 +9,18 @@ from starlette.responses import JSONResponse
 
 from codecare.config import get_settings
 
-# path prefix -> (max_requests, window_seconds)
+# path, max_requests, window_seconds, methods
 PATH_LIMITS = (
-    ("/api/v1/auth/register", 5, 60),
-    ("/api/v1/auth/login", 10, 60),
-    ("/api/v1/contact", 8, 60),
-    ("/api/v1/webhooks/github", 60, 60),
-    ("/api/v1/repos/", 20, 60),
+    ("/api/v1/auth/register", 5, 60, {"POST"}),
+    ("/api/v1/auth/login", 10, 60, {"POST"}),
+    ("/api/v1/auth/forgot-password", 5, 60, {"POST"}),
+    ("/api/v1/auth/reset-password", 8, 60, {"POST"}),
+    ("/api/v1/auth/verify-email", 10, 60, {"POST"}),
+    ("/api/v1/auth/resend-verification", 3, 60, {"POST"}),
+    ("/api/v1/auth/github/start", 10, 60, {"GET"}),
+    ("/api/v1/contact", 8, 60, {"POST"}),
+    ("/api/v1/webhooks/github", 60, 60, {"POST"}),
+    ("/api/v1/repos/", 20, 60, {"POST"}),
 )
 
 
@@ -25,10 +30,10 @@ class PathRateLimit(BaseHTTPMiddleware):
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
     def _limit_for(self, path: str, method: str) -> tuple[int, int] | None:
-        if method not in {"POST", "PATCH"}:
-            return None
-        for prefix, count, window in PATH_LIMITS:
-            if path == prefix or (prefix.endswith("/") and path.startswith(prefix) and path.endswith("/scans")):
+        for prefix, count, window, methods in PATH_LIMITS:
+            if method not in methods:
+                continue
+            if prefix.endswith("/") and path.startswith(prefix) and path.endswith("/scans"):
                 return count, window
             if path == prefix:
                 return count, window

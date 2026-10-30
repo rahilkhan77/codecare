@@ -27,5 +27,7 @@ def validate_settings(settings: Settings) -> None:
         raise RuntimeError(str(exc)) from exc
     if settings.is_sqlite:
         raise RuntimeError("SQLite is not supported in production. Set DATABASE_URL to PostgreSQL.")
+    if not (settings.public_base_url or "").startswith("https://"):
+        raise RuntimeError("PUBLIC_BASE_URL must use https in production.")
     if "*" in settings.cors_origins:
         raise RuntimeError("Wildcard CORS is not allowed in production.")

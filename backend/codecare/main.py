@@ -5,18 +5,20 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from codecare.config import get_settings
+from codecare.csrf import CSRFMiddleware
 from codecare.db import Base, engine
 from codecare.logging_config import configure_logging
 from codecare.production import validate_settings
 from codecare.rate_limit import PathRateLimit
-from codecare.routers import auth, billing, contact, github, maintenance, workspace
+from codecare.routers import auth, billing, contact, github, maintenance, org, workspace
+from codecare.services.email import delivery_mode
 from codecare.static_site import file_response
 from codecare.worker import worker_loop
 
@@ -56,12 +58,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="CodeCare", version="0.2.0", lifespan=lifespan)
 app.add_middleware(SecurityHeaders)
 app.add_middleware(PathRateLimit)
+app.add_middleware(CSRFMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Stripe-Signature", "X-Hub-Signature-256"],
+    allow_headers=["Content-Type", "Authorization", "Stripe-Signature", "X-Hub-Signature-256", "X-CSRF-Token"],
 )
 
 app.include_router(auth.router)
@@ -70,6 +73,7 @@ app.include_router(github.router)
 app.include_router(workspace.router)
 app.include_router(maintenance.router)
 app.include_router(billing.router)
+app.include_router(org.router)
 
 
 @app.get("/health")
@@ -77,8 +81,10 @@ def health():
     return {
         "ok": True,
         "github_configured": settings.github_configured,
+        "github_oauth_configured": settings.github_oauth_configured,
         "stripe_configured": settings.stripe_configured,
         "supabase_configured": settings.supabase_configured,
+        "email": delivery_mode(settings),
         "ai": "remote" if (settings.groq_api_key or settings.openai_api_key or settings.anthropic_api_key) else "heuristic",
     }
 
@@ -102,7 +108,5 @@ def root():
 @app.get("/{full_path:path}")
 def public_site(full_path: str, request: Request):
     if full_path.startswith("api/") or full_path in {"health", "readyz"}:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Not found")
     return file_response(full_path)

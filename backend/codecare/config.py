@@ -53,7 +53,18 @@ class Settings(BaseSettings):
     stripe_price_team: str = ""
 
     cookie_name: str = "codecare_session"
+    cookie_domain: str = ""
+    csrf_cookie_name: str = "codecare_csrf"
     session_hours: int = 12
+    email_verification_hours: int = 24
+    password_reset_hours: int = 1
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "CodeCare <noreply@codecare.si>"
+    smtp_tls: bool = True
     webhook_replay_seconds: int = 300
     disable_worker: bool = False
     scan_interval_hours: int = 24
@@ -66,6 +77,14 @@ class Settings(BaseSettings):
     @property
     def github_configured(self) -> bool:
         return bool(self.github_app_id and self.github_private_key_pem and self.github_app_client_id)
+
+    @property
+    def github_oauth_configured(self) -> bool:
+        return bool(self.github_app_client_id and self.github_app_client_secret)
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.smtp_host.strip())
 
     @property
     def stripe_configured(self) -> bool:

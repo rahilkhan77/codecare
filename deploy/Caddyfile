@@ -1,5 +1,5 @@
-# Reverse proxy with HTTPS. Replace codecare.example.com.
-codecare.example.com {
+# Reverse proxy with HTTPS for the production site.
+codecare.si, www.codecare.si {
 	encode gzip
 	reverse_proxy api:8000
 }

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from codecare.db import get_db
-from codecare.deps import AuthContext, current_auth, org_scoped
+from codecare.deps import AuthContext, current_auth, org_scoped, require_roles
 from codecare.models import (
     DetectedIssue,
     FixProposal,
@@ -61,7 +61,7 @@ def repo_detail(repo_id: str, auth: AuthContext = Depends(current_auth), db: Ses
 
 
 @router.post("/api/v1/repos/{repo_id}/scans")
-def trigger_scan(repo_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def trigger_scan(repo_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     repo = org_scoped(Repository, repo_id, auth, db)
     if not repo.connected:
         raise HTTPException(status_code=400, detail="Repository is disconnected")
@@ -76,7 +76,7 @@ def trigger_scan(repo_id: str, auth: AuthContext = Depends(current_auth), db: Se
 
 
 @router.patch("/api/v1/repos/{repo_id}")
-def update_repo(repo_id: str, payload: RepoScheduleUpdate, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def update_repo(repo_id: str, payload: RepoScheduleUpdate, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     repo = org_scoped(Repository, repo_id, auth, db)
     repo.scan_interval_hours = payload.scan_interval_hours
     db.commit()
@@ -116,7 +116,7 @@ def issue_detail(issue_id: str, auth: AuthContext = Depends(current_auth), db: S
 
 
 @router.post("/api/v1/issues/{issue_id}/diagnose")
-def diagnose_issue(issue_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def diagnose_issue(issue_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     issue = org_scoped(DetectedIssue, issue_id, auth, db)
     assert_metric_quota(db, auth.organization_id, "ai_calls", "ai_per_day")
     job = enqueue(db, organization_id=auth.organization_id, kind="diagnose", repository_id=issue.repository_id, issue_id=issue.id)
@@ -124,7 +124,7 @@ def diagnose_issue(issue_id: str, auth: AuthContext = Depends(current_auth), db:
 
 
 @router.post("/api/v1/issues/{issue_id}/propose-fix")
-def propose(issue_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def propose(issue_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     issue = org_scoped(DetectedIssue, issue_id, auth, db)
     assert_metric_quota(db, auth.organization_id, "ai_calls", "ai_per_day")
     job = enqueue(db, organization_id=auth.organization_id, kind="propose_fix", repository_id=issue.repository_id, issue_id=issue.id)
@@ -139,7 +139,7 @@ def fix_detail(proposal_id: str, auth: AuthContext = Depends(current_auth), db: 
 
 
 @router.post("/api/v1/fixes/{proposal_id}/verify")
-def verify(proposal_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def verify(proposal_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     proposal = org_scoped(FixProposal, proposal_id, auth, db)
     job = enqueue(
         db,
@@ -153,7 +153,7 @@ def verify(proposal_id: str, auth: AuthContext = Depends(current_auth), db: Sess
 
 
 @router.post("/api/v1/fixes/{proposal_id}/pull-request")
-def open_pr(proposal_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def open_pr(proposal_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     proposal = org_scoped(FixProposal, proposal_id, auth, db)
     latest = db.scalar(
         select(VerificationRun).where(VerificationRun.proposal_id == proposal.id).order_by(VerificationRun.created_at.desc())
