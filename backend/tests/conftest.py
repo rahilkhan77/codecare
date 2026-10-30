@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["APP_SECRET"] = "test-secret-key-please-change"
+os.environ["APP_SECRET"] = "test-secret-key-please-change-now"
 os.environ["GITHUB_WEBHOOK_SECRET"] = "webhook-secret"
 os.environ["CREDENTIALS_ENCRYPTION_KEY"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 

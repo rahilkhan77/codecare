@@ -1,0 +1,108 @@
+# Production stack for https://codecare.si
+# Copy .env.example to .env and fill secrets before starting.
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: codecare
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: codecare
+    volumes:
+      - codecare_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codecare -d codecare"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - codecare_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      PUBLIC_BASE_URL: https://codecare.si
+      API_CORS_ORIGINS: https://codecare.si,https://www.codecare.si
+      COOKIE_DOMAIN: .codecare.si
+      DATABASE_URL: postgresql+psycopg2://codecare:${POSTGRES_PASSWORD}@postgres:5432/codecare
+      REDIS_URL: redis://redis:6379/0
+      CODECARE_DISABLE_WORKER: "1"
+      CODECARE_RUN_MIGRATIONS: "1"
+      DEMO_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    # The sandbox talks to the host Docker socket. Override if that socket is root-only.
+    user: "0:0"
+    command: ["python", "-m", "codecare.worker"]
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      PUBLIC_BASE_URL: https://codecare.si
+      DATABASE_URL: postgresql+psycopg2://codecare:${POSTGRES_PASSWORD}@postgres:5432/codecare
+      REDIS_URL: redis://redis:6379/0
+      CODECARE_DISABLE_WORKER: "0"
+      CODECARE_RUN_MIGRATIONS: "0"
+      DEMO_MODE: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  codecare_pg:
+  codecare_redis:
+  caddy_data:
+  caddy_config:

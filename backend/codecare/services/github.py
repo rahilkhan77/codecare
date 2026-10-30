@@ -213,6 +213,15 @@ async def list_workflow_runs(token: str, full_name: str) -> list[dict]:
         return []
 
 
+async def merge_pull_request(token: str, full_name: str, number: int) -> dict:
+    return await _request(
+        "PUT",
+        f"{GITHUB_API}/repos/{full_name}/pulls/{number}/merge",
+        token,
+        json={"merge_method": "squash", "commit_title": "CodeCare auto-merge"},
+    )
+
+
 async def create_pull_request(token: str, full_name: str, *, title: str, body: str, head: str, base: str) -> dict:
     return await _request(
         "POST",

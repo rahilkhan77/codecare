@@ -54,4 +54,5 @@ def safe_file(full_path: str) -> Path:
 
 def file_response(full_path: str) -> FileResponse:
     path = safe_file(full_path)
-    return FileResponse(path)
+    cache = "public, max-age=86400" if path.suffix in {".css", ".js", ".svg", ".png", ".webp", ".ico"} else "no-cache"
+    return FileResponse(path, headers={"Cache-Control": cache})

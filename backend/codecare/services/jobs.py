@@ -344,14 +344,30 @@ async def _run_pr(db: Session, job: MaintenanceJob) -> None:
         message=f"fix: {proposal.summary[:70]}",
         files=files,
     )
+    auto_note = (
+        "Auto-merge is enabled for this app. CodeCare will merge only if GitHub accepts the merge after verification."
+        if repo.auto_merge
+        else "Auto-merge is off. Review and merge this pull request yourself."
+    )
     pr = await gh.create_pull_request(
         token,
         repo.full_name,
         title=f"CodeCare: {proposal.summary[:70]}",
-        body="Proposed by CodeCare after an isolated verification run. Review before merging. CodeCare will not merge this pull request.",
+        body=f"Proposed by CodeCare after an isolated verification run.\n\n{auto_note}",
         head=branch,
         base=meta.get("default_branch") or repo.default_branch,
     )
+    status = "open"
+    merge_error = ""
+    if repo.auto_merge and pr.get("number"):
+        try:
+            merged = await gh.merge_pull_request(token, repo.full_name, int(pr["number"]))
+            if merged.get("merged"):
+                status = "merged"
+            else:
+                merge_error = merged.get("message") or "GitHub did not merge the pull request."
+        except Exception as exc:
+            merge_error = redact(str(exc))
     record = PullRequestRecord(
         id=new_id(),
         organization_id=repo.organization_id,
@@ -361,10 +377,11 @@ async def _run_pr(db: Session, job: MaintenanceJob) -> None:
         number=pr.get("number"),
         url=pr.get("html_url") or "",
         title=pr.get("title") or "",
-        status="open",
+        status=status,
     )
     db.add(record)
     proposal.status = "pr_opened"
-    notify(db, repo.organization_id, "Pull request opened", record.url)
-    job.result = json.dumps({"pull_request_id": record.id, "url": record.url})
+    notice = record.url if not merge_error else f"{record.url} Auto-merge did not complete: {merge_error}"
+    notify(db, repo.organization_id, "Pull request merged" if status == "merged" else "Pull request opened", notice)
+    job.result = json.dumps({"pull_request_id": record.id, "url": record.url, "status": status, "merge_error": merge_error})
     db.commit()

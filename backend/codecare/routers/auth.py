@@ -103,6 +103,7 @@ def _public_profile(profile: Profile, org: Organization | None, role: str, membe
         "email": profile.email,
         "full_name": profile.full_name,
         "email_verified": profile.email_verified_at is not None,
+        "onboarding_completed": profile.onboarding_completed_at is not None,
         "role": role,
         "organization": {"id": org.id, "name": org.name, "slug": org.slug} if org else None,
         "organizations": organizations,

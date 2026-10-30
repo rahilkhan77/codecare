@@ -3,7 +3,8 @@
 ## Authentication and sessions
 
 - Passwords are hashed with bcrypt. They are never stored in plaintext.
-- Sessions are JWTs in an httpOnly, `SameSite=Lax` cookie. Tokens are not returned to JavaScript for GitHub or Stripe secrets.
+- Sessions are server-backed JWTs in an httpOnly, `SameSite=Lax` cookie. Logout revokes the session row. Tokens are not returned to JavaScript.
+- State-changing API calls require a double-submit CSRF token (`codecare_csrf` plus `X-CSRF-Token`). Signed webhooks are exempt.
 - Optional Supabase JWTs are verified with the configured JWT secret before a local profile is linked.
 
 ## Authorization and tenancy
@@ -45,11 +46,29 @@
 
 ## Other controls
 
-- Path-based rate limits on register, login, contact, GitHub webhooks, and scan POSTs (disabled in tests).
-- Production startup refuses weak secrets, SQLite, and wildcard CORS.
+- Path-based rate limits on register, login, password reset, contact, GitHub webhooks, and scan POSTs (disabled when `APP_ENV=test`).
+- Responses send a Content-Security-Policy (inline theme script is hash-pinned), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, COOP, and CORP. Production also sends HSTS.
+- Static CSS, JS, and SVG are cached for a day. HTML is `no-cache`. Responses are gzip-compressed.
+- Production startup refuses weak secrets, SQLite, wildcard CORS, a non-HTTPS public URL, and `DEMO_MODE`.
+- `DEMO_MODE` seeds clearly labeled `[Sample]` rows for UI review and is off by default.
 - Audit log for login, GitHub connect/disconnect, scans, fixes, PRs, billing.
 - Input validation via Pydantic.
 - Static file serving does not expose `backend/`, `.env`, or key files.
+
+## OWASP Top 10 notes
+
+| Risk | How CodeCare handles it |
+| --- | --- |
+| Broken access control | Organization membership is checked on every tenant query. Owner/admin/member gates billing, GitHub writes, and scans. |
+| Cryptographic failures | bcrypt passwords, Fernet for GitHub tokens, HTTPS and Secure cookies in production. |
+| Injection | Parameterized SQLAlchemy queries. Repository paths reject `..`. Shell is not given customer filenames unsafely in the sandbox policy. |
+| Insecure design | Pull requests require a verified sandbox result. AI output is never treated as verified. |
+| Security misconfiguration | Production startup checks. CSP, HSTS, no wildcard CORS. Demo mode cannot run in production. |
+| Vulnerable components | `pip-audit` is part of review. Pin runtime dependencies in `backend/requirements.txt`. |
+| Identification and authentication failures | Rate limits, session revocation, CSRF, email verification, reset tokens stored as SHA-256. |
+| Software and data integrity | Stripe and GitHub webhooks verify signatures. Sandbox does not run install scripts from customer packages. |
+| Security logging failures | Audit log for auth, GitHub, scans, fixes, pull requests, and billing. Logs redact secrets. |
+| SSRF | GitHub calls go to `api.github.com` with server credentials. AI calls go only to the configured provider host. |
 
 ## Remaining risks
 

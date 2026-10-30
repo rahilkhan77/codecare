@@ -1,5 +1,15 @@
-# Reverse proxy with HTTPS for the production site.
-codecare.si, www.codecare.si {
-	encode gzip
+# Automatic HTTPS for codecare.si. www redirects to the apex.
+www.codecare.si {
+	redir https://codecare.si{uri} permanent
+}
+
+codecare.si {
+	encode gzip zstd
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
 	reverse_proxy api:8000
 }

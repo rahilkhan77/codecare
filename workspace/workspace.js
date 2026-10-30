@@ -95,7 +95,8 @@ if (registerForm) {
       if (data.email_delivery && data.email_delivery !== "smtp") {
         sessionStorage.setItem("codecare-email-note", data.message || "");
       }
-      window.location.href = safeNext();
+      const next = new URLSearchParams(window.location.search).get("next");
+      window.location.href = next && next.startsWith("/workspace/") && !next.startsWith("//") ? next : "/workspace/?setup=1";
     });
   });
 }
@@ -173,6 +174,18 @@ if (document.body.dataset.page === "invite") {
   });
 }
 
+if (document.body.dataset.page === "login") {
+  fetch("/health")
+    .then((response) => response.json())
+    .then((data) => {
+      const note = document.querySelector("#demo-note");
+      if (!note || !data.demo_mode) return;
+      note.hidden = false;
+      note.textContent = "Demo mode is on. Sign in as demo@codecare.si with password demo-review-pass. Workspace records are labeled Sample.";
+    })
+    .catch(() => {});
+}
+
 document.querySelectorAll("[data-github-signin]").forEach((button) => {
   fetch("/api/v1/auth/providers")
     .then((response) => response.json())
@@ -206,7 +219,7 @@ document.querySelectorAll("[data-github-signin]").forEach((button) => {
 
 const viewRoot = document.querySelector("#view-root");
 if (viewRoot) {
-  const state = { me: null, view: "overview", detail: null };
+  const state = { me: null, view: "overview", detail: null, demo: false };
 
   async function waitForJob(jobId) {
     if (!jobId) return null;
@@ -238,10 +251,19 @@ if (viewRoot) {
   }
 
   function showNotice(message, isError = true) {
-    const html = `<div class="banner${isError ? " error" : ""}" id="action-status" role="status">${esc(message)}</div>`;
-    const existing = document.querySelector("#action-status");
-    if (existing) existing.outerHTML = html;
-    else viewRoot.insertAdjacentHTML("afterbegin", html);
+    let stack = document.querySelector("#toast-stack");
+    if (!stack) {
+      stack = document.createElement("div");
+      stack.id = "toast-stack";
+      stack.className = "toast-stack";
+      document.body.appendChild(stack);
+    }
+    const toast = document.createElement("div");
+    toast.className = `toast${isError ? " error" : ""}`;
+    toast.setAttribute("role", "status");
+    toast.textContent = message;
+    stack.appendChild(toast);
+    window.setTimeout(() => toast.remove(), 6400);
   }
 
   function setView(name) {
@@ -263,7 +285,7 @@ if (viewRoot) {
 
   async function render() {
     viewRoot.setAttribute("aria-busy", "true");
-    viewRoot.innerHTML = `<p class="empty-state">Loading…</p>`;
+    viewRoot.innerHTML = `<div class="skeleton-grid" aria-hidden="true"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton short"></span></div><p class="empty-state">Loading workspace…</p>`;
     try {
       if (state.view === "overview") await renderOverview();
       else if (state.view === "repos") await renderRepos();
@@ -272,10 +294,24 @@ if (viewRoot) {
       else if (state.view === "prs") await renderPRs();
       else if (state.view === "integrations") await renderIntegrations();
       else if (state.view === "billing") await renderBilling();
+      else if (state.view === "report") await renderReport();
       else if (state.view === "account") await renderAccount();
       else if (state.view === "issue") await renderIssue();
       else if (state.view === "fix") await renderFix();
       else viewRoot.innerHTML = banner("That view is not available.", true);
+      if (state.me && !state.me.onboarding_completed && (state.view === "overview" || new URLSearchParams(window.location.search).get("setup") === "1")) {
+        viewRoot.insertAdjacentHTML("afterbegin", `<section class="banner" id="onboarding"><b>Two-minute setup.</b> 1. Account created. 2. Connect GitHub. 3. Select the apps. 4. Choose Starter, Indie, or Studio. <button class="text-link" id="goto-integrations" type="button">Connect GitHub</button> <button class="text-link" id="goto-billing" type="button">Choose a plan</button> <button class="text-link" id="finish-setup" type="button">Done for now</button></section>`);
+        document.querySelector("#goto-integrations")?.addEventListener("click", () => setView("integrations"));
+        document.querySelector("#goto-billing")?.addEventListener("click", () => setView("billing"));
+        document.querySelector("#finish-setup")?.addEventListener("click", async () => {
+          await api("/api/v1/onboarding/complete", { method: "POST" });
+          state.me = await requireSession();
+          render();
+        });
+      }
+      if (state.demo) {
+        viewRoot.insertAdjacentHTML("afterbegin", banner("Demo mode. Every record in this workspace is sample data and is labeled [Sample]. GitHub, Stripe, and AI were not contacted."));
+      }
       if (state.me && !state.me.email_verified) {
         const note = sessionStorage.getItem("codecare-email-note");
         viewRoot.insertAdjacentHTML(
@@ -306,8 +342,8 @@ if (viewRoot) {
       ? data.repositories.map((repo) => `
           <div class="repo-row" data-repo="${repo.id}">
             <span class="repo-icon">⬡</span>
-            <span class="repo-name"><b>${esc(repo.full_name)}</b><small>${esc(repo.language || "language unknown")} · ${repo.last_scanned_at ? `scanned ${esc(repo.last_scanned_at)}` : "not scanned"}</small></span>
-            <span class="repo-health ${repo.health === "attention" ? "attention" : ""}"><i></i> ${repo.health}</span>
+            <span class="repo-name"><b>${esc(repo.full_name)}</b><small>${esc(repo.language || "language unknown")} · last check ${repo.last_scanned_at ? esc(repo.last_scanned_at) : "never"} · ${esc(repo.open_issues ?? 0)} open · ${esc(repo.prs_shipped_this_month ?? 0)} PRs this month</small></span>
+            <span class="repo-health ${repo.health === "attention" ? "attention" : ""}"><i></i> ${esc(repo.health)}</span>
           </div>`).join("")
       : `<p class="empty-state">No repositories connected yet. Use Integrations to install the GitHub App.</p>`;
     const activity = data.activity.length
@@ -391,12 +427,37 @@ if (viewRoot) {
     viewRoot.innerHTML = `
       <div class="dash-heading"><div><h2>${esc(repo.full_name)}</h2><p class="dash-subtitle">${esc(repo.language || "language unknown")} · health ${esc(repo.health)} · last scan ${esc(repo.last_scanned_at || "never")}</p></div></div>
       <div class="action-row">
-        <button class="button button-dark" data-scan="${repo.id}" type="button">Scan now</button>
+        ${canWrite() ? `<button class="button button-dark" data-scan="${esc(repo.id)}" type="button">Scan now</button>` : ""}
+        <label>Cadence <select id="cadence" aria-label="Scan cadence"><option value="24" ${repo.scan_interval_hours === 24 ? "selected" : ""}>Daily</option><option value="168" ${repo.scan_interval_hours === 168 ? "selected" : ""}>Weekly</option></select></label>
+        <label><input id="auto-merge" type="checkbox" ${repo.auto_merge ? "checked" : ""}> Auto-merge when verification passes</label>
         <button class="text-link" id="back-repos" type="button">Back to repositories</button>
       </div>
+      <form id="request-fix" class="stack-form">
+        <label for="fix-request">Request a fix</label>
+        <textarea id="fix-request" name="description" minlength="10" required placeholder="Describe the bug in plain words"></textarea>
+        <button class="button button-dark" type="submit">Send to CodeCare</button>
+      </form>
       <h3>Scan history</h3>${scans}
       <h3>Detected issues</h3>${issues}`;
     document.querySelector("#back-repos").addEventListener("click", () => setView("repos"));
+    const saveSchedule = async () => {
+      const scan_interval_hours = Number(document.querySelector("#cadence").value);
+      const auto_merge = document.querySelector("#auto-merge").checked;
+      const response = await api(`/api/v1/repos/${repo.id}`, { method: "PATCH", body: JSON.stringify({ scan_interval_hours, auto_merge }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) showNotice(errorDetail(data, "Could not save the app settings."));
+    };
+    document.querySelector("#cadence")?.addEventListener("change", saveSchedule);
+    document.querySelector("#auto-merge")?.addEventListener("change", saveSchedule);
+    document.querySelector("#request-fix")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const description = new FormData(event.target).get("description");
+      const response = await api(`/api/v1/repos/${repo.id}/requests`, { method: "POST", body: JSON.stringify({ description }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return showNotice(errorDetail(data, "The request was not saved."));
+      showNotice(data.detail || (data.queued ? "Request queued." : "Request saved."), !data.queued && Boolean(data.detail));
+      event.target.reset();
+    });
     viewRoot.querySelector("[data-scan]")?.addEventListener("click", async (event) => {
       const response = await api(`/api/v1/repos/${event.currentTarget.dataset.scan}/scans`, { method: "POST" });
       const data = await response.json();
@@ -532,7 +593,9 @@ if (viewRoot) {
     const repoList = available.length
       ? `<h3>Authorized repositories</h3>${available.map((repo) => `<label class="repo-row"><input type="checkbox" value="${esc(repo.github_repo_id)}" ${canWrite() ? "" : "disabled"}> <span class="repo-name"><b>${esc(repo.full_name)}</b><small>${repo.private ? "private" : "public"} · ${esc(repo.default_branch)}</small></span></label>`).join("")}${canWrite() ? `<div class="action-row"><button class="button button-dark" id="connect-repos" type="button">Connect selected</button></div>` : ""}`
       : "";
-    const statusLine = github.configured
+    const statusLine = github.sample
+      ? banner("This workspace includes a sample repository for review. Live GitHub access is still not configured, so install and connect actions are unavailable.")
+      : github.configured
       ? `<p>GitHub App is configured. ${github.connected ? `Connected as ${esc(github.account_login || github.github_login)}.` : "Not installed yet."} OAuth: ${esc(github.oauth?.status || "missing")}.</p>${actions}`
       : banner("GitHub is not configured. Set GITHUB_APP_ID, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, and the private key on the server.");
     viewRoot.innerHTML = `
@@ -566,6 +629,24 @@ if (viewRoot) {
     });
   }
 
+  async function renderReport() {
+    const report = await (await api("/api/v1/reports/monthly")).json();
+    const prs = (report.pull_requests || []).map((row) => `<div class="issue-row"><div><b>${esc(row.title)}</b><div class="dash-subtitle">${esc(row.url || row.status)}</div></div><span>${esc(row.status)}</span></div>`).join("") || `<p class="empty-state">No pull requests this month.</p>`;
+    const fixes = (report.fixes || []).map((row) => `<div class="issue-row"><div><b>${esc(row.title)}</b></div><span>${esc(row.status)}</span></div>`).join("") || `<p class="empty-state">Nothing moved forward yet this month.</p>`;
+    viewRoot.innerHTML = `
+      <div class="dash-heading"><div><h2>Monthly report</h2><p class="dash-subtitle">${esc(report.month || "")}. ${esc(report.summary || "")}</p></div></div>
+      <div class="action-row"><button class="button button-dark" id="email-report" type="button">Email this report</button></div>
+      <h3>Apps</h3>
+      ${(report.apps || []).map((repo) => `<div class="issue-row"><div><b>${esc(repo.full_name)}</b><div class="dash-subtitle">${esc(repo.health)} · ${esc(repo.open_issues)} open · ${esc(repo.prs_shipped_this_month)} PRs</div></div></div>`).join("") || `<p class="empty-state">No apps connected.</p>`}
+      <h3>Pull requests</h3>${prs}
+      <h3>Issues moved forward</h3>${fixes}`;
+    document.querySelector("#email-report")?.addEventListener("click", async () => {
+      const response = await api("/api/v1/reports/monthly/email", { method: "POST" });
+      const data = await response.json().catch(() => ({}));
+      showNotice(data.message || errorDetail(data, "The report was not emailed."), !response.ok || data.delivery === "unavailable" || data.delivery === "failed");
+    });
+  }
+
   async function renderBilling() {
     const [plans, status] = await Promise.all([
       (await api("/api/v1/billing/plans")).json(),
@@ -580,7 +661,8 @@ if (viewRoot) {
       ${plans.plans.map((plan) => `
         <article class="panel" style="margin-top:10px">
           <h3>${esc(plan.name)}</h3>
-          <p>${plan.monthly ? `$${plan.monthly}/month` : "Custom"}</p>
+          <p>${plan.monthly ? `$${plan.monthly}/month` : "Custom"} · ${plan.repos ? `${esc(plan.repos)} app${plan.repos === 1 ? "" : "s"}` : "unlimited apps"}</p>
+          <p class="dash-subtitle">${esc(plan.blurb || "")}</p>
           ${plan.id !== "enterprise" && status.checkout_enabled && canWrite() ? `<button class="button button-dark" data-plan="${esc(plan.id)}" type="button">Checkout</button>
           <button class="text-link" data-change="${esc(plan.id)}" type="button">Change to this plan</button>` : ""}
         </article>`).join("")}`;
@@ -709,9 +791,11 @@ if (viewRoot) {
     });
   }
 
-  requireSession().then((me) => {
+  requireSession().then(async (me) => {
     if (!me) return;
     state.me = me;
+    const health = await fetch("/health").then((response) => response.json()).catch(() => ({}));
+    state.demo = Boolean(health.demo_mode);
     render();
   });
 }

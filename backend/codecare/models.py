@@ -28,6 +28,7 @@ class Profile(Base):
     github_user_id: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -94,6 +95,7 @@ class Repository(Base):
     health_status: Mapped[str] = mapped_column(String(32), default="unknown")
     last_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scan_interval_hours: Mapped[int] = mapped_column(Integer, default=24)
+    auto_merge: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

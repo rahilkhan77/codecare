@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_price_starter: str = ""
+    stripe_price_indie: str = ""
+    stripe_price_studio: str = ""
     stripe_price_pro: str = ""
     stripe_price_team: str = ""
 
@@ -67,6 +69,7 @@ class Settings(BaseSettings):
     smtp_tls: bool = True
     webhook_replay_seconds: int = 300
     disable_worker: bool = False
+    demo_mode: bool = False
     scan_interval_hours: int = 24
     max_job_attempts: int = 3
 

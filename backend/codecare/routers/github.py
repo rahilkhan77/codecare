@@ -30,9 +30,11 @@ def github_status(auth: AuthContext = Depends(current_auth), db: Session = Depen
     settings = get_settings()
     installation = db.scalar(select(GithubInstallation).where(GithubInstallation.organization_id == auth.organization_id))
     iid = str(installation.installation_id) if installation else ""
-    connected = bool(installation and not iid.startswith("pending-") and not iid.startswith("revoked-"))
+    sample = bool(installation and (installation.token_status == "sample" or iid.startswith("sample-")))
+    connected = bool(installation and not sample and not iid.startswith("pending-") and not iid.startswith("revoked-"))
     return {
         "configured": settings.github_configured,
+        "sample": sample,
         "connected": connected,
         "account_login": installation.account_login if installation else None,
         "github_login": installation.github_login if installation else None,
@@ -146,6 +148,8 @@ async def github_setup(installation_id: str, state: str | None = None, setup_act
 @router.get("/api/v1/github/repos/available")
 async def available_repos(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
     installation = db.scalar(select(GithubInstallation).where(GithubInstallation.organization_id == auth.organization_id))
+    if installation and (installation.token_status == "sample" or str(installation.installation_id).startswith("sample-")):
+        return []
     if not installation or installation.installation_id.startswith("pending-"):
         raise HTTPException(status_code=400, detail="Install the GitHub App before listing repositories")
     token = await gh.installation_token(installation.installation_id)

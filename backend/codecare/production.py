@@ -7,6 +7,7 @@ WEAK_SECRETS = {
     "",
     "dev-only-change-me",
     "test-secret-key-please-change",
+    "test-secret-key-please-change-now",
     "change-me-to-a-long-random-string",
 }
 
@@ -31,3 +32,5 @@ def validate_settings(settings: Settings) -> None:
         raise RuntimeError("PUBLIC_BASE_URL must use https in production.")
     if "*" in settings.cors_origins:
         raise RuntimeError("Wildcard CORS is not allowed in production.")
+    if settings.demo_mode:
+        raise RuntimeError("DEMO_MODE cannot be enabled in production.")

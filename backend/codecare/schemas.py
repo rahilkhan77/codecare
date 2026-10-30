@@ -84,6 +84,11 @@ class CheckoutRequest(BaseModel):
 
 class RepoScheduleUpdate(BaseModel):
     scan_interval_hours: int = Field(ge=1, le=168)
+    auto_merge: bool | None = None
+
+
+class FixRequest(BaseModel):
+    description: str = Field(min_length=10, max_length=4000)
 
 
 class ChangePlanRequest(BaseModel):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +12,7 @@ from codecare.deps import AuthContext, current_auth, org_scoped, require_roles
 from codecare.models import (
     DetectedIssue,
     FixProposal,
+    GithubInstallation,
     MaintenanceJob,
     PullRequestRecord,
     Repository,
@@ -18,7 +20,7 @@ from codecare.models import (
     VerificationRun,
     new_id,
 )
-from codecare.schemas import RepoScheduleUpdate
+from codecare.schemas import FixRequest, RepoScheduleUpdate
 from codecare.services.entitlements import assert_metric_quota
 from codecare.services.jobs import enqueue, has_active_job
 
@@ -35,6 +37,7 @@ def _repo(row: Repository) -> dict:
         "last_scanned_at": row.last_scanned_at.isoformat() if row.last_scanned_at else None,
         "private": row.private,
         "scan_interval_hours": row.scan_interval_hours,
+        "auto_merge": bool(row.auto_merge),
     }
 
 
@@ -75,10 +78,54 @@ def trigger_scan(repo_id: str, auth: AuthContext = Depends(require_roles("owner"
     return {"scan_id": scan.id, "job_id": job.id, "status": "queued"}
 
 
+@router.post("/api/v1/repos/{repo_id}/requests")
+def request_fix(
+    repo_id: str,
+    payload: FixRequest,
+    auth: AuthContext = Depends(require_roles("owner", "admin")),
+    db: Session = Depends(get_db),
+):
+    repo = org_scoped(Repository, repo_id, auth, db)
+    if not repo.connected:
+        raise HTTPException(status_code=400, detail="Repository is disconnected")
+    description = payload.description.strip()
+    issue = DetectedIssue(
+        id=new_id(),
+        organization_id=auth.organization_id,
+        repository_id=repo.id,
+        fingerprint=hashlib.sha256(f"request|{repo.id}|{description}".encode()).hexdigest()[:32],
+        title=f"Requested fix: {description[:120]}",
+        category="request",
+        severity="medium",
+        status="open",
+        evidence=description,
+    )
+    db.add(issue)
+    db.commit()
+    installation = db.get(GithubInstallation, repo.installation_id) if repo.installation_id else None
+    usable = bool(installation and not str(installation.installation_id).startswith(("pending-", "sample-", "revoked-")))
+    if not usable:
+        return {
+            "issue_id": issue.id,
+            "queued": False,
+            "detail": "The request is saved. Investigation starts after this app is connected to a configured GitHub App.",
+        }
+    job = enqueue(
+        db,
+        organization_id=auth.organization_id,
+        kind="diagnose",
+        repository_id=repo.id,
+        issue_id=issue.id,
+    )
+    return {"issue_id": issue.id, "queued": True, "job_id": job.id}
+
+
 @router.patch("/api/v1/repos/{repo_id}")
 def update_repo(repo_id: str, payload: RepoScheduleUpdate, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     repo = org_scoped(Repository, repo_id, auth, db)
     repo.scan_interval_hours = payload.scan_interval_hours
+    if payload.auto_merge is not None:
+        repo.auto_merge = payload.auto_merge
     db.commit()
     return _repo(repo)
 

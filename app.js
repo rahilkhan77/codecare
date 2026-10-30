@@ -1,3 +1,13 @@
+const mainLandmark = document.querySelector('main');
+if (mainLandmark && !mainLandmark.id) mainLandmark.id = 'main';
+if (!document.querySelector('.skip-link') && mainLandmark) {
+  const skip = document.createElement('a');
+  skip.className = 'skip-link';
+  skip.href = '#main';
+  skip.textContent = 'Skip to content';
+  document.body.prepend(skip);
+}
+
 const menuButton = document.querySelector('.menu-toggle');
 const mainNav = document.querySelector('.main-nav');
 const themeToggle = document.querySelector('[data-theme-toggle]');
@@ -11,7 +21,7 @@ function applyTheme(theme) {
   if (themeLabel) themeLabel.textContent = isDark ? 'Light' : 'Dark';
 }
 
-applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 themeToggle?.addEventListener('click', () => {
   const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   applyTheme(nextTheme);
@@ -23,7 +33,7 @@ themeToggle?.addEventListener('click', () => {
 });
 
 window.addEventListener('storage', (event) => {
-  if (event.key === 'codecare-theme') applyTheme(event.newValue === 'dark' ? 'dark' : 'light');
+  if (event.key === 'codecare-theme') applyTheme(event.newValue === 'light' ? 'light' : 'dark');
 });
 
 menuButton?.addEventListener('click', () => {

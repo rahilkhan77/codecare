@@ -18,18 +18,17 @@ from codecare.services.entitlements import current_plan
 router = APIRouter(tags=["billing"])
 
 PLANS = [
-    {"id": "starter", "name": "Starter", "monthly": 19, "repos": 1},
-    {"id": "pro", "name": "Pro", "monthly": 49, "repos": 5},
-    {"id": "team", "name": "Team", "monthly": 149, "repos": 15},
-    {"id": "enterprise", "name": "Enterprise", "monthly": None, "repos": None},
+    {"id": "starter", "name": "Starter", "monthly": 29, "repos": 1, "blurb": "One app, maintained."},
+    {"id": "indie", "name": "Indie", "monthly": 79, "repos": 5, "blurb": "A bundle of five apps."},
+    {"id": "studio", "name": "Studio", "monthly": 199, "repos": None, "blurb": "Unlimited apps, one fee."},
 ]
 
 
 def _price_map(settings) -> dict[str, str]:
     return {
         "starter": settings.stripe_price_starter,
-        "pro": settings.stripe_price_pro,
-        "team": settings.stripe_price_team,
+        "indie": settings.stripe_price_indie or settings.stripe_price_pro,
+        "studio": settings.stripe_price_studio or settings.stripe_price_team,
     }
 
 
@@ -69,8 +68,6 @@ def status(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
 @router.post("/api/v1/billing/checkout")
 def checkout(payload: CheckoutRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     stripe, settings = _stripe()
-    if payload.plan == "enterprise":
-        raise HTTPException(status_code=400, detail="Enterprise is custom. Use the contact form.")
     price = _price_map(settings).get(payload.plan)
     if not price:
         raise HTTPException(status_code=400, detail="Unknown plan or missing Stripe price ID")

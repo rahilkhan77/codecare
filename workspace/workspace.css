@@ -1,3 +1,14 @@
+.skip-link { position: absolute; left: 12px; top: -40px; z-index: 30; padding: 8px 12px; background: var(--ink); color: var(--paper); }
+.skip-link:focus { top: 12px; }
+.toast-stack { position: fixed; right: 16px; bottom: 16px; z-index: 40; display: grid; gap: 8px; width: min(360px, calc(100% - 32px)); }
+.toast { padding: 12px 14px; border-radius: 6px; background: var(--ink); color: var(--paper); font-size: 13px; line-height: 1.45; box-shadow: 0 10px 30px #00000022; }
+.toast.error { background: #6d4034; color: #fff8f4; }
+.skeleton-grid { display: grid; gap: 10px; margin-bottom: 16px; }
+.skeleton { display: block; height: 18px; border-radius: 4px; background: linear-gradient(90deg, var(--warm), var(--line), var(--warm)); background-size: 200% 100%; animation: skeleton-shimmer 1.2s ease-in-out infinite; }
+.skeleton.short { width: 45%; }
+@keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+.app-frame .side-item { transition: background .18s ease, color .18s ease; }
 .workspace-page { min-height: 100vh; }
 .workspace-page .site-header { width: min(1320px, calc(100% - 48px)); }
 .auth-layout { width: min(980px, calc(100% - 40px)); margin: 48px auto 96px; display: grid; grid-template-columns: 1.05fr .95fr; gap: 28px; align-items: stretch; }
@@ -8,7 +19,8 @@
 .auth-points li { padding-left: 16px; border-left: 2px solid var(--green); color: var(--ink); font-size: 14px; line-height: 1.45; }
 .auth-shell { padding: 32px 28px 28px; border: 1px solid var(--line); background: var(--white); border-radius: 8px; }
 .auth-shell label, .stack-form label { display: block; margin: 16px 0 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
-.auth-shell input, .stack-form input, .stack-form select { width: 100%; padding: 12px 13px; border: 1px solid var(--line); border-radius: 5px; background: var(--white); color: var(--ink); font: 15px var(--sans); }
+.auth-shell input, .stack-form input, .stack-form select, .stack-form textarea { width: 100%; padding: 12px 13px; border: 1px solid var(--line); border-radius: 5px; background: var(--white); color: var(--ink); font: 15px var(--sans); }
+.stack-form textarea { min-height: 96px; resize: vertical; }
 .auth-shell input:focus-visible, .stack-form input:focus-visible, .stack-form select:focus-visible, .button:focus-visible, .text-link:focus-visible, .side-item:focus-visible { outline: 2px solid var(--green-dark); outline-offset: 2px; }
 .auth-shell .button, .stack-form .button { border: 0; cursor: pointer; }
 .auth-shell .button { width: 100%; justify-content: center; margin-top: 22px; }

@@ -12,7 +12,7 @@ py -m http.server 8765
 
 Then open http://127.0.0.1:8765/ in a browser.
 
-Light theme is the default. The header toggle switches between light and dark themes and remembers the choice in browser local storage.
+Dark theme is the default for a first visit. The header toggle switches between dark and light and remembers the choice in browser local storage.
 
 ## Full platform
 

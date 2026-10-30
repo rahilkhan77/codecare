@@ -99,4 +99,4 @@ Roles: `owner` and `admin` can connect repositories, run scans, propose and veri
 | POST | `/api/v1/billing/checkout` | 503 if Stripe is not configured |
 | POST | `/api/v1/webhooks/stripe` | Signature verification |
 
-Plan catalog (proposed): Starter $19, Pro $49, Team $149, Enterprise custom.
+Plan catalog: Starter $29 (1 app), Indie $79 (5 apps), Studio $199 (unlimited). Checkout stays disabled until `STRIPE_SECRET_KEY` and the matching price ID are set.

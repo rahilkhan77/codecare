@@ -90,6 +90,10 @@ In development and test, an empty `SMTP_HOST` prints the message to the API log 
 
 Suggested production from-address: `CodeCare <noreply@codecare.si>`.
 
+## Demo mode
+
+`DEMO_MODE=false` by default. Set `DEMO_MODE=true` only in development. Startup creates `demo@codecare.si` / `demo-review-pass` and a workspace whose scan, issue, fix, verification, and pull request are prefixed `[Sample]`. Production refuses to boot when demo mode is on. See [DEPLOYMENT.md](DEPLOYMENT.md) for the VPS and hosted-platform steps.
+
 ## Stripe
 
 Checkout remains HTTP 503 until `STRIPE_SECRET_KEY` and at least `STRIPE_PRICE_STARTER` are set. Entitlements are taken from `subscriptions` rows written by signed webhooks.
