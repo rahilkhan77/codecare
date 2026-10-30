@@ -120,3 +120,56 @@ body { font-size: 16px; font-family: var(--sans); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+html[data-theme="dark"] .page-intro { border-color: var(--line); background: #151d17; }
+html[data-theme="dark"] .page-kicker, html[data-theme="dark"] .page-section-label { color: #a2bea5; }
+html[data-theme="dark"] .page-title { color: var(--ink); }
+html[data-theme="dark"] .page-title em { color: #9bb99e; }
+html[data-theme="dark"] .page-lede, html[data-theme="dark"] .page-content p,
+html[data-theme="dark"] .page-content ul, html[data-theme="dark"] .page-content li { color: var(--muted); }
+html[data-theme="dark"] .page-content h2, html[data-theme="dark"] .page-content h3,
+html[data-theme="dark"] .plan-name, html[data-theme="dark"] .usage-panel h2,
+html[data-theme="dark"] .contact-aside h2, html[data-theme="dark"] .story-card h2,
+html[data-theme="dark"] .developer-card h2, html[data-theme="dark"] .steps-list h2 { color: var(--ink); }
+html[data-theme="dark"] .draft-notice { border-color: #405342; background: #202d23; color: #c2d1c3; }
+html[data-theme="dark"] .draft-notice strong { color: #d9e7d9; }
+html[data-theme="dark"] .feature-note { border-color: #87a68b; background: #202c23; color: #b8c8b9; }
+
+html[data-theme="dark"] .billing-toggle { border-color: #405144; background: #202b23; }
+html[data-theme="dark"] .billing-toggle button { color: #b8c4b9; }
+html[data-theme="dark"] .billing-toggle button[aria-pressed="true"] { background: #354638; color: #f0f5f0; box-shadow: 0 1px 3px #00000050; }
+html[data-theme="dark"] .annual-note { color: #b3c7b5; }
+html[data-theme="dark"] .plan-card-page { border-color: #354339; background: #1b241d; }
+html[data-theme="dark"] .plan-card-page.recommended { border-color: #8eae92; box-shadow: 0 12px 34px #00000035; }
+html[data-theme="dark"] .recommended-tag { background: #5b7c60; color: #fff; }
+html[data-theme="dark"] .plan-tagline, html[data-theme="dark"] .plan-price span,
+html[data-theme="dark"] .billing-detail, html[data-theme="dark"] .plan-card-page li,
+html[data-theme="dark"] .planned-label, html[data-theme="dark"] .pricing-caveat { color: #acb8ad; }
+html[data-theme="dark"] .plan-card-page ul { border-color: var(--line); }
+html[data-theme="dark"] .plan-card-page li::before { color: #9fbea2; }
+html[data-theme="dark"] .usage-panel { border-color: #354339; background: #202b23; }
+html[data-theme="dark"] .usage-panel p { color: #b2beb3; }
+
+html[data-theme="dark"] .contact-card { border-color: #354339; background: #1b241d; }
+html[data-theme="dark"] .contact-card label { color: #d4dfd5; }
+html[data-theme="dark"] .contact-card input, html[data-theme="dark"] .contact-card textarea,
+html[data-theme="dark"] .contact-card select { border-color: #405144; background: #141b16; color: #edf2ed; }
+html[data-theme="dark"] .contact-card input::placeholder, html[data-theme="dark"] .contact-card textarea::placeholder { color: #849186; }
+html[data-theme="dark"] .contact-card input:focus, html[data-theme="dark"] .contact-card textarea:focus,
+html[data-theme="dark"] .contact-card select:focus { outline-color: #a0c2a3; }
+html[data-theme="dark"] .contact-card [aria-invalid="true"] { border-color: #db8f7d; }
+html[data-theme="dark"] .contact-status { color: #e3a89a !important; }
+html[data-theme="dark"] .contact-status.is-error { border-color: #c18170; background: #352622; }
+html[data-theme="dark"] .field-error { color: #e3a89a; }
+html[data-theme="dark"] .contact-aside p, html[data-theme="dark"] .contact-placeholder { color: #b0bcb1; }
+html[data-theme="dark"] .contact-placeholder { border-color: #526553; }
+
+html[data-theme="dark"] .story-card, html[data-theme="dark"] .developer-card { border-color: #354339; background: #1b241d; }
+html[data-theme="dark"] .story-card p, html[data-theme="dark"] .developer-card p:not(.page-section-label),
+html[data-theme="dark"] .steps-list p { color: #b0bcb1; }
+html[data-theme="dark"] .developer-avatar { background: #2a392e; color: #d6e6d7; }
+html[data-theme="dark"] .developer-link { color: #a9c8ad; }
+html[data-theme="dark"] .developer-link:hover { color: #dcebdd; }
+html[data-theme="dark"] .steps-list { border-color: var(--line); }
+html[data-theme="dark"] .steps-list article { border-color: var(--line); }
+html[data-theme="dark"] .steps-list article::before { color: #9eb59f; }

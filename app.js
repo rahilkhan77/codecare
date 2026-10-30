@@ -1,5 +1,30 @@
 const menuButton = document.querySelector('.menu-toggle');
 const mainNav = document.querySelector('.main-nav');
+const themeToggle = document.querySelector('[data-theme-toggle]');
+const themeLabel = themeToggle?.querySelector('[data-theme-label]');
+
+function applyTheme(theme) {
+  const isDark = theme === 'dark';
+  document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+  themeToggle?.setAttribute('aria-pressed', String(isDark));
+  themeToggle?.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+  if (themeLabel) themeLabel.textContent = isDark ? 'Light' : 'Dark';
+}
+
+applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+themeToggle?.addEventListener('click', () => {
+  const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  applyTheme(nextTheme);
+  try {
+    localStorage.setItem('codecare-theme', nextTheme);
+  } catch {
+    // The current choice still applies if browser storage is unavailable.
+  }
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key === 'codecare-theme') applyTheme(event.newValue === 'dark' ? 'dark' : 'light');
+});
 
 menuButton?.addEventListener('click', () => {
   const isOpen = menuButton.getAttribute('aria-expanded') === 'true';
