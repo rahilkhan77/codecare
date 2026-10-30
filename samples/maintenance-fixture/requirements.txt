@@ -1,0 +1,2 @@
+# Pinned old requests for outdated-package detection. Not installed on the API host.
+requests==2.6.0

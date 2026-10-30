@@ -1,0 +1,30 @@
+.workspace-page { min-height: 100vh; }
+.workspace-page .site-header { width: min(1320px, calc(100% - 48px)); }
+.auth-shell { width: min(460px, calc(100% - 48px)); margin: 72px auto 120px; padding: 36px 32px; border: 1px solid var(--line); background: var(--white); }
+.auth-shell h1 { font: 600 32px/1.15 var(--display); letter-spacing: -.04em; margin: 12px 0 10px; }
+.auth-shell p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.auth-shell label { display: block; margin: 16px 0 6px; font-size: 13px; font-weight: 600; }
+.auth-shell input { width: 100%; padding: 12px 13px; border: 1px solid var(--line); background: #fff; font: 15px var(--sans); }
+.auth-shell .button { width: 100%; justify-content: center; margin-top: 22px; border: 0; cursor: pointer; }
+.auth-status { min-height: 22px; margin-top: 14px; font-size: 13px; color: #8e594b; }
+.app-frame { width: min(1320px, calc(100% - 40px)); margin: 24px auto 64px; }
+.app-frame .dashboard-shell { min-height: 78vh; }
+.app-frame .dashboard-layout { min-height: 70vh; grid-template-columns: 210px 1fr; }
+.app-frame .dash-main { padding: 24px 28px 20px; }
+.app-frame .side-item { cursor: pointer; border: 0; background: none; width: 100%; text-align: left; }
+.app-frame .repo-row { cursor: pointer; }
+.banner { margin: 0 0 16px; padding: 10px 12px; border-left: 2px solid #92aa91; background: #f0f3ed; color: #637066; font-size: 13px; }
+.banner.error { border-color: #ab715f; background: #f6efeb; color: #8e594b; }
+.empty-state { padding: 28px 8px; color: #7a847a; font-size: 14px; line-height: 1.6; }
+.table-row, .issue-row { display: grid; grid-template-columns: 1.4fr .7fr .6fr .6fr; gap: 10px; align-items: center; padding: 12px 0; border-top: 1px solid #f0f0ed; font-size: 13px; }
+.issue-row { cursor: pointer; }
+.pill { font: 10px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: #748c78; }
+.pill.attention, .pill.high { color: #aa7d59; }
+pre.diff { white-space: pre-wrap; font: 12px var(--mono); background: #fff; border: 1px solid var(--line); padding: 14px; overflow: auto; max-height: 360px; }
+.action-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.action-row .button { min-width: 0; cursor: pointer; border: 0; }
+.log-block { font: 12px var(--mono); white-space: pre-wrap; color: #555; }
+@media (max-width: 760px) {
+  .app-frame .dashboard-layout { grid-template-columns: 1fr; }
+  .app-frame .dash-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+}

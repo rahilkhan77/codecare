@@ -1,0 +1,5 @@
+# Reverse proxy with HTTPS. Replace codecare.example.com.
+codecare.example.com {
+	encode gzip
+	reverse_proxy api:8000
+}

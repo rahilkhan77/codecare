@@ -1,8 +1,8 @@
-# CodeCare static website
+# CodeCare
 
-This folder contains the standalone CodeCare website files.
+The original static marketing website still lives at the repository root. A FastAPI backend and `/workspace` product UI now sit beside it.
 
-## Run locally
+## Marketing site only
 
 From this folder in PowerShell, run:
 
@@ -14,4 +14,21 @@ Then open http://127.0.0.1:8765/ in a browser.
 
 Light theme is the default. The header toggle switches between light and dark themes and remembers the choice in browser local storage.
 
-The pricing and product capabilities are marked as proposed. Contact form submissions are not sent. Replace the site-domain placeholder in `sitemap.xml` and complete the legal-page placeholders before publishing.
+## Full platform
+
+See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/API.md](docs/API.md).
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:PYTHONPATH = (Get-Location).Path
+uvicorn codecare.main:app --reload --port 8000
+```
+
+Open http://127.0.0.1:8000/ for the site and http://127.0.0.1:8000/workspace/ to register a workspace.
+
+GitHub, Stripe, hosted AI, and sandbox verification stay disabled until the matching environment variables are set. The product does not report those integrations as successful without credentials.
+
+Replace the site-domain placeholder in `sitemap.xml` and complete the legal-page placeholders before publishing.

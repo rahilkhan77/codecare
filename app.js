@@ -92,8 +92,31 @@ if (contactForm) {
       return;
     }
 
-    status.textContent = 'Your details are valid, but message delivery is not connected. No message was sent or stored.';
-    status.classList.add('is-error');
+    status.classList.remove('is-error');
+    status.textContent = 'Sending…';
+    fetch('/api/v1/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: contactForm.querySelector('[name="name"]').value,
+        email: contactForm.querySelector('[name="email"]').value,
+        topic: topic.value,
+        message: contactForm.querySelector('[name="message"]').value,
+      }),
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        status.textContent = data.detail || 'The message could not be stored.';
+        status.classList.add('is-error');
+        return;
+      }
+      status.textContent = data.detail || 'Message stored.';
+      status.classList.remove('is-error');
+      contactForm.reset();
+    }).catch(() => {
+      status.textContent = 'The API is not reachable. Start the CodeCare backend and try again.';
+      status.classList.add('is-error');
+    });
   });
 }
 
