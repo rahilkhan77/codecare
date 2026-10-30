@@ -58,6 +58,7 @@ def status(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
     return {
         "checkout_enabled": get_settings().stripe_configured,
+        "demo_billing": get_settings().demo_mode,
         "plan": current_plan(db, auth.organization_id),
         "status": sub.status if sub else "inactive",
         "current_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
@@ -65,8 +66,30 @@ def status(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
     }
 
 
+def _apply_demo_plan(plan: str, auth: AuthContext, db: Session) -> dict:
+    if plan not in {"starter", "indie", "studio"}:
+        raise HTTPException(status_code=400, detail="Unknown plan")
+    sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
+    if not sub:
+        sub = Subscription(id=new_id(), organization_id=auth.organization_id)
+        db.add(sub)
+    sub.plan = plan
+    sub.status = "active"
+    sub.cancel_at_period_end = False
+    audit(db, action="billing.demo_plan", organization_id=auth.organization_id, profile_id=auth.profile.id, metadata={"plan": plan})
+    db.commit()
+    return {
+        "demo": True,
+        "plan": plan,
+        "detail": "Demo plan recorded. Stripe was not charged.",
+        "url": get_settings().public_base_url.rstrip("/") + "/workspace/?billing=demo",
+    }
+
+
 @router.post("/api/v1/billing/checkout")
 def checkout(payload: CheckoutRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
+    if get_settings().demo_mode:
+        return _apply_demo_plan(payload.plan, auth, db)
     stripe, settings = _stripe()
     price = _price_map(settings).get(payload.plan)
     if not price:
@@ -102,6 +125,14 @@ def portal(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Ses
 
 @router.post("/api/v1/billing/cancel")
 def cancel(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
+    if get_settings().demo_mode:
+        sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
+        if not sub or sub.status not in {"active", "trialing"}:
+            raise HTTPException(status_code=400, detail="No active demo subscription to cancel.")
+        sub.cancel_at_period_end = True
+        audit(db, action="billing.demo_cancel", organization_id=auth.organization_id, profile_id=auth.profile.id)
+        db.commit()
+        return {"ok": True, "demo": True, "detail": "Demo subscription will end when the period ends. Stripe was not contacted."}
     stripe, _settings = _stripe()
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
     if not sub or not sub.stripe_subscription_id:
@@ -115,6 +146,10 @@ def cancel(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Ses
 
 @router.post("/api/v1/billing/change-plan")
 def change_plan(payload: ChangePlanRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
+    if get_settings().demo_mode:
+        result = _apply_demo_plan(payload.plan, auth, db)
+        result["detail"] = "Demo plan changed. Stripe was not charged."
+        return result
     stripe, settings = _stripe()
     price = _price_map(settings).get(payload.plan)
     if not price:

@@ -593,15 +593,25 @@ if (viewRoot) {
     const repoList = available.length
       ? `<h3>Authorized repositories</h3>${available.map((repo) => `<label class="repo-row"><input type="checkbox" value="${esc(repo.github_repo_id)}" ${canWrite() ? "" : "disabled"}> <span class="repo-name"><b>${esc(repo.full_name)}</b><small>${repo.private ? "private" : "public"} · ${esc(repo.default_branch)}</small></span></label>`).join("")}${canWrite() ? `<div class="action-row"><button class="button button-dark" id="connect-repos" type="button">Connect selected</button></div>` : ""}`
       : "";
+    const sampleConnect = github.demo_mode && !github.configured
+      ? `<div class="action-row"><button class="button button-dark" id="connect-sample" type="button">Connect the sample app</button></div>`
+      : "";
     const statusLine = github.sample
-      ? banner("This workspace includes a sample repository for review. Live GitHub access is still not configured, so install and connect actions are unavailable.")
+      ? banner("This workspace includes a sample repository for review. Live GitHub access is still not configured, so install and connect actions are unavailable.") + sampleConnect
       : github.configured
       ? `<p>GitHub App is configured. ${github.connected ? `Connected as ${esc(github.account_login || github.github_login)}.` : "Not installed yet."} OAuth: ${esc(github.oauth?.status || "missing")}.</p>${actions}`
-      : banner("GitHub is not configured. Set GITHUB_APP_ID, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, and the private key on the server.");
+      : banner("GitHub is not configured. Set GITHUB_APP_ID, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, and the private key on the server.") + sampleConnect;
     viewRoot.innerHTML = `
       <div class="dash-heading"><div><h2>Integrations</h2><p class="dash-subtitle">GitHub access uses a GitHub App. Tokens are stored only on the server.</p></div></div>
       ${statusLine}
       ${repoList}`;
+    document.querySelector("#connect-sample")?.addEventListener("click", async () => {
+      const response = await api("/api/v1/github/repos/connect-sample", { method: "POST" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return showNotice(errorDetail(data, "The sample app was not connected."));
+      showNotice(`Connected ${data.full_name}. It is sample data, not a live GitHub repository.`, false);
+      setView("repos");
+    });
     document.querySelector("#install-gh")?.addEventListener("click", async () => {
       const response = await api("/api/v1/github/install-url");
       const data = await response.json();
@@ -654,23 +664,24 @@ if (viewRoot) {
     ]);
     viewRoot.innerHTML = `
       <div class="dash-heading"><div><h2>Billing</h2><p class="dash-subtitle">Paid access is determined on the server from Stripe, not from this page.</p></div></div>
-      ${status.checkout_enabled ? "" : banner("Stripe is not configured. Checkout is disabled until STRIPE_SECRET_KEY and STRIPE_PRICE_STARTER are set.")}
+      ${status.demo_billing ? banner("Demo billing is on. Plan changes are recorded locally and Stripe is not charged.") : status.checkout_enabled ? "" : banner("Stripe is not configured. Checkout is disabled until STRIPE_SECRET_KEY and STRIPE_PRICE_STARTER are set.")}
       ${canWrite() ? "" : `<p class="role-note">Billing changes require an owner or admin.</p>`}
       <p>Current plan: <b>${esc(status.plan)}</b> (${esc(status.status)})</p>
-      ${status.checkout_enabled && canWrite() ? `<div class="action-row"><button class="button button-dark" id="portal" type="button">Customer portal</button><button class="button button-dark" id="cancel-sub" type="button">Cancel at period end</button></div>` : ""}
+      ${canWrite() && (status.checkout_enabled || status.demo_billing) ? `<div class="action-row">${status.checkout_enabled ? `<button class="button button-dark" id="portal" type="button">Customer portal</button>` : ""}<button class="button button-dark" id="cancel-sub" type="button">Cancel at period end</button></div>` : ""}
       ${plans.plans.map((plan) => `
         <article class="panel" style="margin-top:10px">
           <h3>${esc(plan.name)}</h3>
           <p>${plan.monthly ? `$${plan.monthly}/month` : "Custom"} · ${plan.repos ? `${esc(plan.repos)} app${plan.repos === 1 ? "" : "s"}` : "unlimited apps"}</p>
           <p class="dash-subtitle">${esc(plan.blurb || "")}</p>
-          ${plan.id !== "enterprise" && status.checkout_enabled && canWrite() ? `<button class="button button-dark" data-plan="${esc(plan.id)}" type="button">Checkout</button>
+          ${plan.id !== "enterprise" && (status.checkout_enabled || status.demo_billing) && canWrite() ? `<button class="button button-dark" data-plan="${esc(plan.id)}" type="button">${status.demo_billing ? "Use this plan" : "Checkout"}</button>
           <button class="text-link" data-change="${esc(plan.id)}" type="button">Change to this plan</button>` : ""}
         </article>`).join("")}`;
     viewRoot.querySelectorAll("[data-plan]").forEach((button) => {
       button.addEventListener("click", async () => {
         const response = await api("/api/v1/billing/checkout", { method: "POST", body: JSON.stringify({ plan: button.dataset.plan }) });
         const data = await response.json();
-        if (!response.ok) return showNotice(data.detail);
+        if (!response.ok) return showNotice(errorDetail(data, "Checkout did not start."));
+        if (data.demo) return showNotice(data.detail || "Demo plan recorded.", false);
         window.location.href = data.url;
       });
     });
@@ -678,7 +689,7 @@ if (viewRoot) {
       button.addEventListener("click", async () => {
         const response = await api("/api/v1/billing/change-plan", { method: "POST", body: JSON.stringify({ plan: button.dataset.change }) });
         const data = await response.json();
-        showNotice(data.detail || data.ok);
+        showNotice(data.detail || (data.ok ? "Plan updated." : "Plan was not changed."), !response.ok);
       });
     });
     document.querySelector("#portal")?.addEventListener("click", async () => {
@@ -690,7 +701,7 @@ if (viewRoot) {
     document.querySelector("#cancel-sub")?.addEventListener("click", async () => {
       const response = await api("/api/v1/billing/cancel", { method: "POST" });
       const data = await response.json();
-      showNotice(data.detail || data.ok);
+      showNotice(data.detail || (response.ok ? "Cancellation recorded." : "Cancellation did not complete."), !response.ok);
     });
   }
 

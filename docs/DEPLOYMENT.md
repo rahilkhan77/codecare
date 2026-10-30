@@ -21,11 +21,13 @@ A small VM (2 vCPU, 4 GB RAM) with Docker and a public IPv4 is enough to start. 
    - `COOKIE_DOMAIN=.codecare.si`
    - `DEMO_MODE=false`
 5. Open TCP 80 and 443. Do not publish Postgres or Redis to the internet. The Compose file does not map those ports.
-6. Build the sandbox image on the worker host when you want verified fixes:
+6. Build the sandbox image on the worker host. Verification refuses to run without it:
 
 ```bash
-docker build -t codecare-sandbox:local sandbox
+docker compose -f docker-compose.prod.yml --profile sandbox build sandbox
 ```
+
+That image is `codecare-sandbox:local`, built from `sandbox/Dockerfile`.
 
 7. Start the stack:
 

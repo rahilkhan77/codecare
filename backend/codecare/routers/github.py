@@ -34,12 +34,53 @@ def github_status(auth: AuthContext = Depends(current_auth), db: Session = Depen
     connected = bool(installation and not sample and not iid.startswith("pending-") and not iid.startswith("revoked-"))
     return {
         "configured": settings.github_configured,
+        "demo_mode": settings.demo_mode,
         "sample": sample,
         "connected": connected,
         "account_login": installation.account_login if installation else None,
         "github_login": installation.github_login if installation else None,
         "oauth": oauth_snapshot(installation),
     }
+
+
+@router.post("/api/v1/github/repos/connect-sample")
+def connect_sample(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
+    settings = get_settings()
+    if not settings.demo_mode:
+        raise HTTPException(status_code=404, detail="Sample repositories are only available in demo mode")
+    repo = db.scalar(
+        select(Repository).where(Repository.organization_id == auth.organization_id, Repository.github_repo_id == "sample-demo")
+    )
+    if repo:
+        repo.connected = True
+        db.commit()
+        return {"id": repo.id, "full_name": repo.full_name, "sample": True}
+    assert_repo_quota(db, auth.organization_id, 1)
+    installation = GithubInstallation(
+        id=new_id(),
+        organization_id=auth.organization_id,
+        installation_id=f"sample-{auth.organization_id[:8]}",
+        account_login="sample",
+        account_type="Organization",
+        token_status="sample",
+    )
+    db.add(installation)
+    db.flush()
+    repo = Repository(
+        id=new_id(),
+        organization_id=auth.organization_id,
+        installation_id=installation.id,
+        github_repo_id="sample-demo",
+        full_name="sample/maintenance-fixture",
+        default_branch="main",
+        private=False,
+        language="Python",
+        connected=True,
+        health_status="unknown",
+    )
+    db.add(repo)
+    db.commit()
+    return {"id": repo.id, "full_name": repo.full_name, "sample": True}
 
 
 @router.get("/api/v1/github/install-url")

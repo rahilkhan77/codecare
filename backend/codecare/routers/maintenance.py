@@ -102,8 +102,12 @@ def request_fix(
     )
     db.add(issue)
     db.commit()
+    from codecare.services.demo import is_sample_repo
+
     installation = db.get(GithubInstallation, repo.installation_id) if repo.installation_id else None
-    usable = bool(installation and not str(installation.installation_id).startswith(("pending-", "sample-", "revoked-")))
+    usable = is_sample_repo(repo) or bool(
+        installation and not str(installation.installation_id).startswith(("pending-", "sample-", "revoked-"))
+    )
     if not usable:
         return {
             "issue_id": issue.id,

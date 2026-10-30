@@ -173,3 +173,5 @@ html[data-theme="dark"] .developer-link:hover { color: #dcebdd; }
 html[data-theme="dark"] .steps-list { border-color: var(--line); }
 html[data-theme="dark"] .steps-list article { border-color: var(--line); }
 html[data-theme="dark"] .steps-list article::before { color: #9eb59f; }
+.legal-todo { background: #f3d7a1; color: #2a2114; font-weight: 700; padding: 0 .25em; }
+html[data-theme="dark"] .legal-todo { background: #6a5424; color: #fff6df; }

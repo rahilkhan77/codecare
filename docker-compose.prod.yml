@@ -87,6 +87,14 @@ services:
       retries: 5
     restart: unless-stopped
 
+  sandbox:
+    image: codecare-sandbox:local
+    build:
+      context: ./sandbox
+    profiles: ["sandbox"]
+    command: ["python", "-c", "print('codecare-sandbox:local is built')"]
+    restart: "no"
+
   caddy:
     image: caddy:2-alpine
     ports:

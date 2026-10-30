@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,6 +30,14 @@ from codecare.services.orgs import bootstrap_org
 DEMO_EMAIL = "demo@codecare.si"
 DEMO_PASSWORD = "demo-review-pass"
 SAMPLE = "[Sample]"
+FIXTURE = Path(__file__).resolve().parents[3] / "samples" / "maintenance-fixture"
+SAMPLE_APP = "def add(left: int, right: int) -> int:\n    return left + right\n"
+
+
+def is_sample_repo(repo) -> bool:
+    repo_id = str(getattr(repo, "github_repo_id", "") or "")
+    full_name = str(getattr(repo, "full_name", "") or "")
+    return repo_id.startswith("sample-") or full_name == "sample/maintenance-fixture"
 
 
 def seed_demo(db: Session) -> str:
