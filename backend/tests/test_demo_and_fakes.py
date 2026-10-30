@@ -64,35 +64,27 @@ def test_fake_smtp_records_message_without_a_server():
     assert len(OUTBOX) == before + 1
 
 
-def test_fake_stripe_checkout_uses_mocked_sdk(client, monkeypatch):
+def test_mocked_razorpay_checkout_returns_subscription_id(client, monkeypatch):
     from codecare.config import get_settings
     from tests.conftest import register
 
     register(client, "billing@example.com")
     settings = get_settings()
-    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_sample")
-    monkeypatch.setattr(settings, "stripe_price_starter", "price_sample")
-    monkeypatch.setattr(settings, "public_base_url", "https://codecare.si")
-    created = {}
+    monkeypatch.setattr(settings, "demo_mode", False)
+    monkeypatch.setattr(settings, "razorpay_key_id", "rzp_test_key")
+    monkeypatch.setattr(settings, "razorpay_key_secret", "rzp_test_secret")
+    monkeypatch.setattr(settings, "razorpay_plan_starter", "plan_starter")
 
-    class Result:
-        url = "https://billing.example.test/checkout/sample"
+    def fake_create(plan, organization_id, settings=None):
+        return {"id": "sub_sample"}
 
-    class Session:
-        @staticmethod
-        def create(**kwargs):
-            created.update(kwargs)
-            return Result()
-
-    class Stripe:
-        api_key = ""
-        checkout = type("Checkout", (), {"Session": Session})
-
-    monkeypatch.setattr("codecare.routers.billing.stripe", Stripe)
+    monkeypatch.setattr("codecare.routers.billing.razorpay.create_subscription", fake_create)
     response = client.post("/api/v1/billing/checkout", json={"plan": "starter"})
-    assert response.status_code == 200
-    assert response.json()["url"].endswith("/sample")
-    assert created["success_url"].startswith("https://codecare.si")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["subscription_id"] == "sub_sample"
+    assert body["key_id"] == "rzp_test_key"
+    assert "razorpay_key_secret" not in body
 
 
 def test_fake_github_lists_only_mocked_repos(client, monkeypatch):

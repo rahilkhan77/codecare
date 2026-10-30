@@ -10,7 +10,7 @@
 - AI provider layer with retries; heuristic fallback does not emit patches
 - Sandbox: no host execution, image required, allowlisted install/runtime argv, patch applied check, pytest-or-inconclusive
 - PRs only after verified sandbox status
-- Stripe checkout/portal/cancel/change-plan; webhooks map price IDs; disabled without keys
+- Razorpay Subscriptions checkout, verify, cancel, and plan changes; signed webhooks; disabled without keys
 - Rate limits, production secret and Fernet checks, readiness probe, structured logging in production
 - Encryption key rotation via `CREDENTIALS_ENCRYPTION_KEY_PREVIOUS`
 
@@ -19,7 +19,7 @@
 - GitHub App install against a real repository
 - Groq/OpenAI/Anthropic model-backed diagnosis
 - Docker engine + image `codecare-sandbox:local` on the worker host
-- Stripe live checkout
+- Razorpay live checkout in USD
 - TLS certificates in front of Caddy/uvicorn
 
 ## Not implemented (and not claimed)

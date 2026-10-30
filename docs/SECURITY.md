@@ -41,8 +41,9 @@
 
 ## Billing
 
-- Checkout and customer portal require Stripe keys.
-- Entitlements come from `subscriptions` updated by signed Stripe webhooks.
+- Checkout requires Razorpay keys. The key secret never goes to the browser.
+- Payment signatures and `X-Razorpay-Signature` are checked with HMAC-SHA256.
+- Entitlements come from `subscriptions` rows written by verified webhooks, not from the frontend.
 
 ## Other controls
 
@@ -66,7 +67,7 @@
 | Security misconfiguration | Production startup checks. CSP, HSTS, no wildcard CORS. Demo mode cannot run in production. |
 | Vulnerable components | `pip-audit` is part of review. Pin runtime dependencies in `backend/requirements.txt`. |
 | Identification and authentication failures | Rate limits, session revocation, CSRF, email verification, reset tokens stored as SHA-256. |
-| Software and data integrity | Stripe and GitHub webhooks verify signatures. Sandbox does not run install scripts from customer packages. |
+| Software and data integrity | Razorpay and GitHub webhooks verify signatures. Sandbox does not run install scripts from customer packages. |
 | Security logging failures | Audit log for auth, GitHub, scans, fixes, pull requests, and billing. Logs redact secrets. |
 | SSRF | GitHub calls go to `api.github.com` with server credentials. AI calls go only to the configured provider host. |
 

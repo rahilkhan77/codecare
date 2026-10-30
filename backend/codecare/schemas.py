@@ -82,6 +82,12 @@ class CheckoutRequest(BaseModel):
     interval: str = "monthly"
 
 
+class RazorpayVerifyRequest(BaseModel):
+    razorpay_payment_id: str = Field(min_length=4, max_length=64)
+    razorpay_subscription_id: str = Field(min_length=4, max_length=64)
+    razorpay_signature: str = Field(min_length=16, max_length=128)
+
+
 class RepoScheduleUpdate(BaseModel):
     scan_interval_hours: int = Field(ge=1, le=168)
     auto_merge: bool | None = None

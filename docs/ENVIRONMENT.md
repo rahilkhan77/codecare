@@ -22,7 +22,7 @@ uvicorn codecare.main:app --reload --port 8000
 
 4. Open http://127.0.0.1:8000/ for the marketing site and http://127.0.0.1:8000/workspace/login.html to sign in.
 
-Production origin is `https://codecare.si`. Set `PUBLIC_BASE_URL=https://codecare.si`, `API_CORS_ORIGINS=https://codecare.si,https://www.codecare.si`, and `COOKIE_DOMAIN=.codecare.si`. Email links, OAuth redirects, and Stripe return URLs use `PUBLIC_BASE_URL`.
+Production origin is `https://codecare.si`. Set `PUBLIC_BASE_URL=https://codecare.si`, `API_CORS_ORIGINS=https://codecare.si,https://www.codecare.si`, and `COOKIE_DOMAIN=.codecare.si`. Email links and OAuth redirects use `PUBLIC_BASE_URL`.
 
 SQLite is the default if `DATABASE_URL` is unset or points at sqlite. Use PostgreSQL for anything beyond local trials.
 
@@ -94,9 +94,11 @@ Suggested production from-address: `CodeCare <noreply@codecare.si>`.
 
 `DEMO_MODE=false` by default. Set `DEMO_MODE=true` only in development. Startup creates `demo@codecare.si` / `demo-review-pass` and a workspace whose scan, issue, fix, verification, and pull request are prefixed `[Sample]`. Production refuses to boot when demo mode is on. See [DEPLOYMENT.md](DEPLOYMENT.md) for the VPS and hosted-platform steps.
 
-## Stripe
+## Razorpay
 
-Checkout remains HTTP 503 until `STRIPE_SECRET_KEY` and at least `STRIPE_PRICE_STARTER` are set. Entitlements are taken from `subscriptions` rows written by signed webhooks.
+Subscriptions are billed in **USD**. Razorpay can charge international cards in USD when that is enabled on the account. CodeCare does not show or convert INR. Create the Starter, Indie, and Studio plans in USD in the Razorpay dashboard and put their ids in `RAZORPAY_PLAN_STARTER`, `RAZORPAY_PLAN_INDIE`, and `RAZORPAY_PLAN_STUDIO`.
+
+Checkout stays HTTP 503 until `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_PLAN_STARTER` are set. The browser opens Razorpay Checkout.js with the `subscription_id` from `POST /api/v1/billing/checkout`. `POST /api/v1/billing/verify` checks the payment signature. Entitlements follow `POST /api/v1/webhooks/razorpay`, which checks `X-Razorpay-Signature`. Demo mode never calls Razorpay and says so.
 
 ## Supabase
 

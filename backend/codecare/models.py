@@ -215,8 +215,8 @@ class Subscription(Base):
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), unique=True)
     plan: Mapped[str] = mapped_column(String(32), default="none")
     status: Mapped[str] = mapped_column(String(32), default="inactive")
-    stripe_customer_id: Mapped[str] = mapped_column(String(64), default="")
-    stripe_subscription_id: Mapped[str] = mapped_column(String(64), default="")
+    razorpay_customer_id: Mapped[str] = mapped_column(String(64), default="")
+    razorpay_subscription_id: Mapped[str] = mapped_column(String(64), default="")
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False)
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -255,6 +255,15 @@ class GithubWebhookEvent(Base):
     delivery_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     event: Mapped[str] = mapped_column(String(64))
     processed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RazorpayWebhookEvent(Base):
+    __tablename__ = "razorpay_webhook_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    event_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    event: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

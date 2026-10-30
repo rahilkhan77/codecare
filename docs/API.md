@@ -96,7 +96,10 @@ Roles: `owner` and `admin` can connect repositories, run scans, propose and veri
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/api/v1/billing/status` | Server-side subscription |
-| POST | `/api/v1/billing/checkout` | 503 if Stripe is not configured |
-| POST | `/api/v1/webhooks/stripe` | Signature verification |
+| POST | `/api/v1/billing/checkout` | Creates a Razorpay subscription. 503 if keys are missing. Demo mode records a local plan and says Razorpay was not charged |
+| POST | `/api/v1/billing/verify` | Checks the Checkout.js payment signature |
+| POST | `/api/v1/billing/change-plan` | Razorpay subscription update. Upgrades apply now. Downgrades apply at cycle end |
+| POST | `/api/v1/billing/cancel` | Cancels the Razorpay subscription at cycle end |
+| POST | `/api/v1/webhooks/razorpay` | Verifies `X-Razorpay-Signature`. Idempotent on `x-razorpay-event-id` |
 
-Plan catalog: Starter $29 (1 app), Indie $79 (5 apps), Studio $199 (unlimited). Checkout stays disabled until `STRIPE_SECRET_KEY` and the matching price ID are set.
+Plan catalog, in USD: Starter $29 (1 app), Indie $79 (5 apps), Studio $199 (unlimited). Checkout stays disabled until `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_PLAN_STARTER` are set.

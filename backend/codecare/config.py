@@ -46,13 +46,12 @@ class Settings(BaseSettings):
     sandbox_cpus: str = "1"
     sandbox_pids_limit: int = 128
 
-    stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
-    stripe_price_starter: str = ""
-    stripe_price_indie: str = ""
-    stripe_price_studio: str = ""
-    stripe_price_pro: str = ""
-    stripe_price_team: str = ""
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+    razorpay_plan_starter: str = ""
+    razorpay_plan_indie: str = ""
+    razorpay_plan_studio: str = ""
 
     cookie_name: str = "codecare_session"
     cookie_domain: str = ""
@@ -90,8 +89,8 @@ class Settings(BaseSettings):
         return bool(self.smtp_host.strip())
 
     @property
-    def stripe_configured(self) -> bool:
-        return bool(self.stripe_secret_key and self.stripe_price_starter)
+    def razorpay_configured(self) -> bool:
+        return bool(self.razorpay_key_id and self.razorpay_key_secret and self.razorpay_plan_starter)
 
     @property
     def supabase_configured(self) -> bool:

@@ -20,6 +20,7 @@ PATH_LIMITS = (
     ("/api/v1/auth/github/start", 10, 60, {"GET"}),
     ("/api/v1/contact", 8, 60, {"POST"}),
     ("/api/v1/webhooks/github", 60, 60, {"POST"}),
+    ("/api/v1/webhooks/razorpay", 60, 60, {"POST"}),
     ("/api/v1/repos/", 20, 60, {"POST"}),
 )
 

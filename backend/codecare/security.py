@@ -159,16 +159,19 @@ def verify_github_signature(secret: str, body: bytes, header: str) -> bool:
     return hmac.compare_digest(expected, header)
 
 
-def verify_stripe_signature(secret: str, body: bytes, header: str) -> bool:
-    if not secret or not header:
+def verify_razorpay_webhook(secret: str, body: bytes, signature: str) -> bool:
+    if not secret or not signature:
         return False
-    try:
-        import stripe
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
-        stripe.Webhook.construct_event(body, header, secret)
-        return True
-    except Exception:
+
+def verify_razorpay_payment(secret: str, payment_id: str, subscription_id: str, signature: str) -> bool:
+    if not secret or not payment_id or not subscription_id or not signature:
         return False
+    message = f"{payment_id}|{subscription_id}".encode()
+    expected = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 
 def redact(text: str) -> str:
