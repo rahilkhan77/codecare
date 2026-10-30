@@ -16,7 +16,7 @@ Dark theme is the default for a first visit. The header toggle switches between 
 
 ## Full platform
 
-See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/API.md](docs/API.md).
+See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md).
 
 ```powershell
 cd backend
