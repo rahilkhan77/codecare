@@ -6,30 +6,17 @@ Fill secrets in `.env` before the first boot. `DEMO_MODE` must stay `false` in p
 
 ## VPS with Docker Compose
 
-A small VM (2 vCPU, 4 GB RAM) with Docker and a public IPv4 is enough to start. Point DNS `A` records for `codecare.si` and `www.codecare.si` at that address before Caddy requests certificates.
+A fresh Ubuntu VM (2 vCPU, 4 GB RAM) with a public IPv4 is enough. Point DNS `A` records for `codecare.si` and `www.codecare.si` at that address before Caddy requests certificates. Open TCP 80 and 443.
 
-1. Install Docker Engine and the Compose plugin.
-2. Clone the repository and check out the release you intend to run.
-3. Copy `.env.example` to `backend/.env`. Do not commit it.
-4. Set at least:
-   - `APP_SECRET` (32+ random characters)
-   - `FERNET_KEY` (Fernet key) in `backend/.env`
-   - `POSTGRES_PASSWORD` (used by Compose for the database URL)
-   - `APP_ENV=production`
-   - `PUBLIC_BASE_URL=https://codecare.si`
-   - `API_CORS_ORIGINS=https://codecare.si`
-   - `COOKIE_DOMAIN=.codecare.si`
-   - `DEMO_MODE=false`
-5. Open TCP 80 and 443. Do not publish Postgres or Redis to the internet. The Compose file does not map those ports.
-6. Build the sandbox image on the worker host. Verification refuses to run without it:
+One command, as root, installs Docker, clones the repo to `/opt/codecare`, builds the sandbox image, and starts Compose:
 
 ```bash
-docker compose -f deploy/docker-compose.prod.yml --profile sandbox build sandbox
+sudo bash scripts/setup-vps.sh
 ```
 
-That image is `codecare-sandbox:local`, built from `sandbox/Dockerfile`.
+The first run copies `.env.example` to `backend/.env` and stops so you can fill it. Set `DATABASE_URL` to the Neon connection string, plus `APP_SECRET`, `FERNET_KEY`, the GitHub App values, `GROQ_API_KEY`, and `RESEND_API_KEY`. Compose does not replace `DATABASE_URL`, so the API and worker use Neon. Redis stays in Compose. A bundled Postgres service exists only with `--profile bundled-db` and is not part of the default boot.
 
-7. Start the stack:
+Re-run `sudo bash scripts/setup-vps.sh` after the file is filled. It builds `codecare-sandbox:local` from `sandbox/Dockerfile`, then:
 
 ```bash
 docker compose -f deploy/docker-compose.prod.yml up -d --build
@@ -37,17 +24,29 @@ docker compose -f deploy/docker-compose.prod.yml up -d --build
 
 The API container runs `alembic upgrade head` before uvicorn (`CODECARE_RUN_MIGRATIONS=1`). The worker starts only after `/readyz` is healthy. Caddy obtains certificates for `codecare.si` and redirects `www` to the apex.
 
-8. Check `https://codecare.si/readyz` and `https://codecare.si/health`.
+The worker mounts `/var/run/docker.sock` and runs as root so it can start sandbox containers. The API process runs as an unprivileged user and does not mount the socket. Container logs use the json-file driver with a 10 MB cap and five files.
 
-The worker mounts `/var/run/docker.sock` and runs as root so it can start sandbox containers. The API process runs as an unprivileged user and does not mount the socket.
+### Health check
+
+```bash
+bash scripts/healthcheck.sh
+```
+
+That asks the API container for `/health` and `/readyz`. From the public internet, check `https://codecare.si/readyz`.
 
 ### Backups
 
+Backups read Neon through `DATABASE_URL` in `backend/.env`. The script does not print the URL.
+
 ```bash
-docker compose -f deploy/docker-compose.prod.yml exec postgres pg_dump -U codecare codecare > codecare.sql
+bash scripts/backup-db.sh
 ```
 
-Keep `FERNET_KEY` with the backup. Database rows cannot be decrypted without it. The key lives in `backend/.env`, which is gitignored.
+The dump lands in `backups/`, which is gitignored. Keep `FERNET_KEY` with the backup. Database rows cannot be decrypted without it. A daily cron entry:
+
+```bash
+0 3 * * * cd /opt/codecare && bash scripts/backup-db.sh
+```
 
 ## Render, Railway, or Fly
 

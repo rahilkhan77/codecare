@@ -27,3 +27,4 @@ data/postgres/
 data/redis/
 backend/test.codecare.db
 codecare-dev.db
+backups/
