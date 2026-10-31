@@ -30,6 +30,7 @@
 ## Execution
 
 - Customer repository code is never imported, `exec`'d, or subprocessed on the API host.
+- When Docker is missing, verification is `limited`: Python files are parsed with `ast.parse` and nothing is executed. `limited` does not open a pull request. `SANDBOX_MODE=remote` reserves a future off-host sandbox and currently sends no code.
 - Dependency install (when a lockfile / pinned requirements exist) runs in Docker with a bridge network, `--ignore-scripts` / `--only-binary=:all:`, and resource limits. That phase is not unrestricted host execution.
 - Test runtime uses `docker run --network none` with memory, CPU, PID, nofile, capability drop, and time limits.
 - `verified` requires the patch bytes on disk and at least one pytest that actually passed. compile-only, tsc-only, empty suites, and failed installs are `inconclusive` or `failed`. They are never treated as verified.

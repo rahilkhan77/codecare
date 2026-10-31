@@ -93,6 +93,41 @@ def test_verify_and_pr_pipeline_mocked(client):
     assert rows[0]["url"] == "https://github.com/acme/api/pull/7"
 
 
+def test_limited_verification_does_not_open_a_pr(client):
+    register(client, "limited@example.com")
+    org_id, repo_id, issue_id = _seed_repo()
+    db = SessionLocal()
+    from codecare.models import FixProposal, VerificationRun
+
+    proposal = FixProposal(
+        id=new_id(),
+        organization_id=org_id,
+        repository_id=repo_id,
+        issue_id=issue_id,
+        summary="parsed only",
+        patch="{}",
+        provider="groq",
+        status="proposed",
+    )
+    db.add(proposal)
+    db.flush()
+    db.add(
+        VerificationRun(
+            id=new_id(),
+            organization_id=org_id,
+            repository_id=repo_id,
+            proposal_id=proposal.id,
+            status="limited",
+            log="LIMITED VERIFICATION",
+        )
+    )
+    db.commit()
+    proposal_id = proposal.id
+    db.close()
+    response = client.post(f"/api/v1/fixes/{proposal_id}/pull-request")
+    assert response.status_code == 409
+
+
 def test_unverified_pr_rejected(client):
     register(client, "unverified@example.com")
     org_id, repo_id, issue_id = _seed_repo()

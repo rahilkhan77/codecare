@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     sandbox_memory: str = "512m"
     sandbox_cpus: str = "1"
     sandbox_pids_limit: int = 128
+    # auto uses Docker when the engine and image exist, otherwise static checks.
+    sandbox_mode: str = "auto"
+    sandbox_remote_url: str = ""
 
     dodo_payments_api_key: str = ""
     dodo_payments_webhook_secret: str = ""
