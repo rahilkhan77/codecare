@@ -15,11 +15,16 @@ Do these on the server, in `.env`, then restart the API and worker.
    - Callback: `https://codecare.si/api/v1/github/oauth/callback`
    - Setup: `https://codecare.si/api/v1/github/setup`
    - Webhook: `https://codecare.si/api/v1/webhooks/github`
-9. Razorpay, in USD: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PLAN_STARTER`, `RAZORPAY_PLAN_INDIE`, `RAZORPAY_PLAN_STUDIO`.
-   - Enable international payments so the plans can be charged in USD.
-   - Create three subscription plans: Starter $29 / month (1 app), Indie $79 / month (5 apps), Studio $199 / month (unlimited).
-   - Webhook: `https://codecare.si/api/v1/webhooks/razorpay`
-   - Events: `subscription.activated`, `subscription.charged`, `subscription.pending`, `subscription.halted`, `subscription.cancelled`, `subscription.completed`, `subscription.updated`, `payment.failed`.
+9. Dodo Payments, in USD. Dodo is the merchant of record.
+   - `DODO_PAYMENTS_API_KEY`
+   - `DODO_PAYMENTS_WEBHOOK_SECRET` (the `whsec_...` signing secret)
+   - `DODO_PAYMENTS_ENVIRONMENT=live_mode` in production, `test_mode` otherwise
+   - `DODO_PRODUCT_STARTER`, `DODO_PRODUCT_INDIE`, `DODO_PRODUCT_STUDIO`
+   - Create three monthly subscription products: Starter $29 (1 app), Indie $79 (5 apps), Studio $199 (unlimited). Set the subscription period to 20 years so they renew until cancel.
+   - Put the three products in one product collection and turn on Settings → Subscriptions → Allow Subscription Updates so the customer portal can switch plans.
+   - Webhook URL: `https://codecare.si/api/v1/webhooks/dodo`
+   - Events: `subscription.active`, `subscription.renewed`, `subscription.on_hold`, `subscription.cancelled`, `subscription.failed`, `subscription.expired`, `subscription.plan_changed`, `payment.succeeded`, `payment.failed`.
+   - Return URL used by checkout and the portal: `https://codecare.si/workspace`
 10. One model key: `GROQ_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`. Without it, CodeCare will not invent a patch.
 11. SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`. Without it, password reset and the monthly report are not emailed.
 12. Sandbox image on the worker host:

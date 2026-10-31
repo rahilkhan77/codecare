@@ -8,7 +8,7 @@ This document records what was actually exercised. It is not a production-ready 
 | --- | --- |
 | GitHub App (`GITHUB_APP_ID` + private key) | No |
 | Groq / OpenAI / Anthropic | No |
-| Razorpay | No |
+| Dodo Payments | No |
 | Docker CLI | Yes |
 | Docker engine | Not running when last checked |
 

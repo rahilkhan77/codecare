@@ -96,13 +96,15 @@ def test_demo_billing_upgrade_downgrade_and_cancel(client, monkeypatch):
     upgrade = client.post("/api/v1/billing/checkout", json={"plan": "indie"})
     assert upgrade.status_code == 200, upgrade.text
     assert upgrade.json()["demo"] is True
-    assert "not charged" in upgrade.json()["detail"].lower() or "not charged" in upgrade.json()["detail"]
+    assert upgrade.json()["detail"] == "Demo plan recorded. Dodo Payments was not charged."
     assert client.get("/api/v1/billing/status").json()["plan"] == "indie"
     downgrade = client.post("/api/v1/billing/change-plan", json={"plan": "starter"})
     assert downgrade.status_code == 200
+    assert downgrade.json()["detail"] == "Demo plan changed. Dodo Payments was not charged."
     assert client.get("/api/v1/billing/status").json()["plan"] == "starter"
     cancelled = client.post("/api/v1/billing/cancel")
     assert cancelled.status_code == 200
+    assert cancelled.json()["detail"] == "Demo subscription will end when the period ends. Dodo Payments was not charged."
     assert client.get("/api/v1/billing/status").json()["cancel_at_period_end"] is True
 
 

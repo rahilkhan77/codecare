@@ -31,12 +31,12 @@ log = logging.getLogger("codecare")
 THEME_SCRIPT_HASH = "sha256-FvTAsFHTkIMHUj7SXhVo6xJLkcvwVR92OEjuiqL3c7I="
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
-    f"script-src 'self' '{THEME_SCRIPT_HASH}' https://checkout.razorpay.com; "
+    f"script-src 'self' '{THEME_SCRIPT_HASH}'; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
-    "img-src 'self' data: https://cdn.razorpay.com; "
-    "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com; "
-    "frame-src https://api.razorpay.com https://checkout.razorpay.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; "
+    "frame-src 'none'; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "
@@ -93,7 +93,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Razorpay-Signature", "X-Hub-Signature-256", "X-CSRF-Token"],
+    allow_headers=["Content-Type", "Authorization", "X-Hub-Signature-256", "X-CSRF-Token"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=512)
 
@@ -112,7 +112,7 @@ def health():
         "ok": True,
         "github_configured": settings.github_configured,
         "github_oauth_configured": settings.github_oauth_configured,
-        "razorpay_configured": settings.razorpay_configured,
+        "dodo_configured": settings.dodo_configured,
         "supabase_configured": settings.supabase_configured,
         "email": delivery_mode(settings),
         "demo_mode": settings.demo_mode,

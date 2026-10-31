@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from codecare.config import get_settings
 from codecare.db import get_db
 from codecare.deps import AuthContext, current_auth, require_roles
-from codecare.models import RazorpayWebhookEvent, Subscription, new_id, utcnow
-from codecare.schemas import ChangePlanRequest, CheckoutRequest, RazorpayVerifyRequest
-from codecare.security import verify_razorpay_payment, verify_razorpay_webhook
-from codecare.services import razorpay
+from codecare.models import DodoWebhookEvent, Organization, Subscription, new_id, utcnow
+from codecare.schemas import ChangePlanRequest, CheckoutRequest
+from codecare.security import verify_standard_webhook
+from codecare.services import dodo
 from codecare.services.audit import audit
+from codecare.services.dodo import PLAN_RANK
 from codecare.services.entitlements import current_plan
-from codecare.services.razorpay import PLAN_RANK
 
 router = APIRouter(tags=["billing"])
 
@@ -28,32 +28,42 @@ PLANS = [
 ]
 
 HANDLED_EVENTS = {
-    "subscription.activated",
-    "subscription.charged",
-    "subscription.pending",
-    "subscription.halted",
+    "subscription.active",
+    "subscription.renewed",
+    "subscription.on_hold",
     "subscription.cancelled",
-    "subscription.completed",
-    "subscription.updated",
+    "subscription.failed",
+    "subscription.expired",
+    "subscription.plan_changed",
+    "payment.succeeded",
     "payment.failed",
 }
 
 EVENT_STATUS = {
-    "subscription.activated": "active",
-    "subscription.charged": "active",
-    "subscription.pending": "pending",
-    "subscription.halted": "halted",
+    "subscription.active": "active",
+    "subscription.renewed": "active",
+    "subscription.plan_changed": "active",
+    "subscription.on_hold": "on_hold",
     "subscription.cancelled": "canceled",
-    "subscription.completed": "completed",
+    "subscription.failed": "failed",
+    "subscription.expired": "expired",
+    "payment.succeeded": "active",
     "payment.failed": "past_due",
 }
 
+TERMINAL_STATUSES = {"canceled", "expired", "inactive", "failed", "completed"}
+PLAN_EVENTS = {"subscription.active", "subscription.renewed", "subscription.plan_changed"}
 
-def _require_razorpay():
+
+def _require_dodo():
     settings = get_settings()
-    if not settings.razorpay_configured:
-        raise HTTPException(status_code=503, detail="Billing is disabled until Razorpay credentials are configured.")
+    if not settings.dodo_configured:
+        raise HTTPException(status_code=503, detail="Billing is disabled until Dodo Payments credentials are configured.")
     return settings
+
+
+def _return_url() -> str:
+    return get_settings().public_base_url.rstrip("/") + "/workspace"
 
 
 def _subscription(db: Session, organization_id: str) -> Subscription:
@@ -62,6 +72,14 @@ def _subscription(db: Session, organization_id: str) -> Subscription:
         sub = Subscription(id=new_id(), organization_id=organization_id)
         db.add(sub)
     return sub
+
+
+def _raise_dodo(exc: Exception) -> None:
+    if isinstance(exc, dodo.DodoNotConfigured):
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if isinstance(exc, dodo.DodoError):
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    raise exc
 
 
 def _apply_demo_plan(plan: str, auth: AuthContext, db: Session) -> dict:
@@ -76,14 +94,14 @@ def _apply_demo_plan(plan: str, auth: AuthContext, db: Session) -> dict:
     return {
         "demo": True,
         "plan": plan,
-        "detail": "Demo plan recorded. Razorpay was not charged.",
+        "detail": "Demo plan recorded. Dodo Payments was not charged.",
     }
 
 
 @router.get("/api/v1/billing/plans")
 def plans():
     settings = get_settings()
-    return {"checkout_enabled": settings.razorpay_configured, "currency": "USD", "plans": PLANS}
+    return {"checkout_enabled": settings.dodo_configured, "currency": "USD", "plans": PLANS}
 
 
 @router.get("/api/v1/billing/status")
@@ -91,14 +109,16 @@ def status(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
     settings = get_settings()
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
     return {
-        "checkout_enabled": settings.razorpay_configured,
+        "checkout_enabled": settings.dodo_configured,
         "demo_billing": settings.demo_mode,
         "currency": "USD",
+        "provider": "dodo",
         "plan": current_plan(db, auth.organization_id),
         "status": sub.status if sub else "inactive",
         "current_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
         "cancel_at_period_end": bool(sub and sub.cancel_at_period_end),
-        "razorpay_subscription_id": sub.razorpay_subscription_id if sub else "",
+        "dodo_subscription_id": sub.dodo_subscription_id if sub else "",
+        "portal_available": bool(sub and sub.dodo_customer_id),
     }
 
 
@@ -106,45 +126,44 @@ def status(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
 def checkout(payload: CheckoutRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     if get_settings().demo_mode:
         return _apply_demo_plan(payload.plan, auth, db)
-    settings = _require_razorpay()
+    settings = _require_dodo()
     if payload.plan not in PLAN_RANK:
         raise HTTPException(status_code=400, detail="Unknown plan")
+    existing = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
+    if existing and existing.dodo_subscription_id and existing.status not in TERMINAL_STATUSES:
+        raise HTTPException(status_code=400, detail="This workspace already has a Dodo subscription. Change the plan or open the customer portal.")
     try:
-        created = razorpay.create_subscription(payload.plan, auth.organization_id, settings)
-    except razorpay.RazorpayError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        created = dodo.create_checkout(
+            plan=payload.plan,
+            organization_id=auth.organization_id,
+            email=auth.profile.email,
+            name=auth.profile.full_name or auth.profile.email,
+            return_url=_return_url(),
+            settings=settings,
+        )
+    except (dodo.DodoNotConfigured, dodo.DodoError) as exc:
+        _raise_dodo(exc)
     sub = _subscription(db, auth.organization_id)
-    sub.razorpay_subscription_id = str(created.get("id") or "")
-    sub.plan = payload.plan
-    sub.status = "pending"
+    if sub.status in TERMINAL_STATUSES or not sub.dodo_subscription_id:
+        sub.plan = payload.plan
+        sub.status = "pending"
     db.commit()
-    return {
-        "key_id": settings.razorpay_key_id,
-        "subscription_id": sub.razorpay_subscription_id,
-        "plan": payload.plan,
-        "name": "CodeCare",
-        "description": f"{payload.plan.title()} · USD",
-        "currency": "USD",
-    }
+    return {"url": created["checkout_url"], "session_id": created["session_id"], "plan": payload.plan}
 
 
-@router.post("/api/v1/billing/verify")
-def verify_payment(payload: RazorpayVerifyRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
-    settings = _require_razorpay()
-    if not verify_razorpay_payment(
-        settings.razorpay_key_secret,
-        payload.razorpay_payment_id,
-        payload.razorpay_subscription_id,
-        payload.razorpay_signature,
-    ):
-        raise HTTPException(status_code=400, detail="Invalid Razorpay payment signature")
+@router.post("/api/v1/billing/portal")
+def portal(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
+    if get_settings().demo_mode:
+        raise HTTPException(status_code=400, detail="Customer portal is unavailable in demo mode. Dodo Payments was not charged.")
+    settings = _require_dodo()
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
-    if not sub or sub.razorpay_subscription_id != payload.razorpay_subscription_id:
-        raise HTTPException(status_code=400, detail="This payment does not match the workspace subscription")
-    sub.status = "active"
-    audit(db, action="billing.verified", organization_id=auth.organization_id, profile_id=auth.profile.id)
-    db.commit()
-    return {"ok": True, "plan": sub.plan, "status": sub.status}
+    if not sub or not sub.dodo_customer_id:
+        raise HTTPException(status_code=400, detail="Start a subscription before opening the customer portal.")
+    try:
+        link = dodo.create_portal(customer_id=sub.dodo_customer_id, return_url=_return_url(), settings=settings)
+    except (dodo.DodoNotConfigured, dodo.DodoError) as exc:
+        _raise_dodo(exc)
+    return {"url": link}
 
 
 @router.post("/api/v1/billing/cancel")
@@ -156,124 +175,162 @@ def cancel(auth: AuthContext = Depends(require_roles("owner", "admin")), db: Ses
         sub.cancel_at_period_end = True
         audit(db, action="billing.demo_cancel", organization_id=auth.organization_id, profile_id=auth.profile.id)
         db.commit()
-        return {"ok": True, "demo": True, "detail": "Demo subscription will end when the period ends. Razorpay was not charged."}
-    settings = _require_razorpay()
+        return {"ok": True, "demo": True, "detail": "Demo subscription will end when the period ends. Dodo Payments was not charged."}
+    settings = _require_dodo()
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
-    if not sub or not sub.razorpay_subscription_id:
-        raise HTTPException(status_code=400, detail="No active Razorpay subscription to cancel.")
+    if not sub or not sub.dodo_subscription_id:
+        raise HTTPException(status_code=400, detail="No active Dodo subscription to cancel.")
     try:
-        razorpay.cancel_subscription(sub.razorpay_subscription_id, settings)
-    except razorpay.RazorpayError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        dodo.cancel_at_next_billing_date(sub.dodo_subscription_id, settings)
+    except (dodo.DodoNotConfigured, dodo.DodoError) as exc:
+        _raise_dodo(exc)
     sub.cancel_at_period_end = True
     audit(db, action="billing.cancel", organization_id=auth.organization_id, profile_id=auth.profile.id)
     db.commit()
-    return {"ok": True, "detail": "Cancellation requested at the end of the Razorpay billing cycle."}
+    return {"ok": True, "detail": "Cancellation is scheduled for the next Dodo billing date. Access stays on until then."}
 
 
 @router.post("/api/v1/billing/change-plan")
 def change_plan(payload: ChangePlanRequest, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     if get_settings().demo_mode:
         result = _apply_demo_plan(payload.plan, auth, db)
-        result["detail"] = "Demo plan changed. Razorpay was not charged."
+        result["detail"] = "Demo plan changed. Dodo Payments was not charged."
         return result
-    settings = _require_razorpay()
+    settings = _require_dodo()
     if payload.plan not in PLAN_RANK:
-        raise HTTPException(status_code=400, detail="Unknown plan or missing Razorpay plan ID")
+        raise HTTPException(status_code=400, detail="Unknown plan")
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
-    if not sub or not sub.razorpay_subscription_id or sub.status not in {"active", "pending"}:
+    if not sub or not sub.dodo_subscription_id or sub.status not in {"active", "past_due", "on_hold"}:
         raise HTTPException(status_code=400, detail="Start a subscription with checkout first.")
     if sub.plan == payload.plan:
         raise HTTPException(status_code=400, detail="That plan is already selected")
     immediate = PLAN_RANK[payload.plan] > PLAN_RANK.get(sub.plan, 0)
     try:
-        razorpay.update_subscription(sub.razorpay_subscription_id, payload.plan, immediate=immediate, settings=settings)
-    except razorpay.RazorpayError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    when = "now" if immediate else "cycle_end"
+        changed = dodo.change_plan(
+            subscription_id=sub.dodo_subscription_id,
+            plan=payload.plan,
+            immediate=immediate,
+            organization_id=auth.organization_id,
+            settings=settings,
+        )
+    except (dodo.DodoNotConfigured, dodo.DodoError) as exc:
+        _raise_dodo(exc)
+    when = "now" if immediate else "next_billing_date"
     audit(db, action="billing.change_plan", organization_id=auth.organization_id, profile_id=auth.profile.id, metadata={"plan": payload.plan, "when": when})
     db.commit()
     return {
         "ok": True,
         "schedule_change_at": when,
-        "detail": "Plan change sent to Razorpay. The workspace updates when the subscription.updated webhook arrives.",
+        "url": changed.get("payment_link"),
+        "detail": "Plan change sent to Dodo Payments. The workspace updates when the subscription webhook arrives.",
     }
 
 
-def _apply_event(db: Session, event_name: str, entity: dict) -> None:
+def _metadata(data: dict) -> dict:
+    meta = data.get("metadata") or {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def _customer_id(data: dict) -> str:
+    customer = data.get("customer") or {}
+    if isinstance(customer, dict):
+        return str(customer.get("customer_id") or "")
+    return ""
+
+
+def _subscription_id(event_name: str, data: dict) -> str:
+    if event_name.startswith("payment."):
+        direct = data.get("subscription_id")
+        if direct:
+            return str(direct)
+        ids = data.get("subscription_ids") or []
+        return str(ids[0]) if ids else ""
+    return str(data.get("subscription_id") or "")
+
+
+def _parse_dt(value) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    text = str(value).replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _apply_event(db: Session, event_name: str, data: dict) -> None:
     settings = get_settings()
-    notes = entity.get("notes") or {}
-    org_id = notes.get("organization_id")
-    if event_name == "payment.failed":
-        subscription_id = str(entity.get("subscription_id") or "")
-    else:
-        subscription_id = str(entity.get("id") or "")
+    notes = _metadata(data)
+    org_id = str(notes.get("organization_id") or "")
+    subscription_id = _subscription_id(event_name, data)
+    if event_name.startswith("payment.") and not subscription_id:
+        return
     sub = None
-    if org_id:
-        sub = db.scalar(select(Subscription).where(Subscription.organization_id == org_id))
+    if org_id and db.get(Organization, org_id):
+        sub = _subscription(db, org_id)
     if sub is None and subscription_id:
-        sub = db.scalar(select(Subscription).where(Subscription.razorpay_subscription_id == subscription_id))
+        sub = db.scalar(select(Subscription).where(Subscription.dodo_subscription_id == subscription_id))
     if sub is None:
         return
-    if subscription_id and event_name.startswith("subscription."):
-        sub.razorpay_subscription_id = subscription_id
-    customer_id = entity.get("customer_id")
+    if subscription_id:
+        sub.dodo_subscription_id = subscription_id
+    customer_id = _customer_id(data)
     if customer_id:
-        sub.razorpay_customer_id = str(customer_id)
-    mapped = razorpay.plan_from_id(entity.get("plan_id"), settings) or notes.get("plan")
-    if mapped in PLAN_RANK and event_name != "payment.failed":
+        sub.dodo_customer_id = customer_id
+    mapped = dodo.plan_from_product(data.get("product_id"), settings) or notes.get("plan")
+    if mapped in PLAN_RANK and event_name in PLAN_EVENTS:
         sub.plan = mapped
-    if event_name == "subscription.updated":
-        raw = str(entity.get("status") or "")
-        status_map = {
-            "active": "active",
-            "authenticated": "pending",
-            "pending": "pending",
-            "halted": "halted",
-            "cancelled": "canceled",
-            "completed": "completed",
-            "created": "pending",
-            "expired": "canceled",
-        }
-        sub.status = status_map.get(raw, sub.status)
-    elif event_name in EVENT_STATUS:
+    if event_name in EVENT_STATUS:
         sub.status = EVENT_STATUS[event_name]
-        if event_name == "subscription.cancelled":
-            sub.cancel_at_period_end = False
-            sub.plan = "none"
-        if event_name == "subscription.completed":
-            sub.plan = "none"
-    period_end = entity.get("current_end")
+    if event_name in {"subscription.cancelled", "subscription.expired"}:
+        sub.cancel_at_period_end = False
+        sub.plan = "none"
+    elif "cancel_at_next_billing_date" in data:
+        sub.cancel_at_period_end = bool(data.get("cancel_at_next_billing_date"))
+    period_end = _parse_dt(data.get("next_billing_date"))
     if period_end:
-        sub.current_period_end = datetime.fromtimestamp(int(period_end), tz=timezone.utc)
+        sub.current_period_end = period_end
     sub.updated_at = utcnow()
     audit(db, action="billing.webhook", organization_id=sub.organization_id, metadata={"type": event_name})
 
 
-@router.post("/api/v1/webhooks/razorpay")
-async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
+@router.post("/api/v1/webhooks/dodo")
+async def dodo_webhook(request: Request, db: Session = Depends(get_db)):
     settings = get_settings()
-    if not settings.razorpay_webhook_secret:
-        raise HTTPException(status_code=503, detail="Razorpay webhook secret is not configured")
+    if not settings.dodo_payments_webhook_secret:
+        raise HTTPException(status_code=503, detail="Dodo Payments webhook secret is not configured")
     body = await request.body()
-    signature = request.headers.get("X-Razorpay-Signature", "")
-    if not verify_razorpay_webhook(settings.razorpay_webhook_secret, body, signature):
-        raise HTTPException(status_code=401, detail="Invalid Razorpay signature")
-    event_id = request.headers.get("x-razorpay-event-id") or hashlib.sha256(body).hexdigest()
-    if db.scalar(select(RazorpayWebhookEvent).where(RazorpayWebhookEvent.event_id == event_id)):
+    webhook_id = request.headers.get("webhook-id", "")
+    webhook_timestamp = request.headers.get("webhook-timestamp", "")
+    webhook_signature = request.headers.get("webhook-signature", "")
+    if not verify_standard_webhook(
+        settings.dodo_payments_webhook_secret,
+        body,
+        webhook_id,
+        webhook_timestamp,
+        webhook_signature,
+        tolerance_seconds=settings.webhook_replay_seconds,
+    ):
+        raise HTTPException(status_code=401, detail="Invalid Dodo Payments signature")
+    if db.scalar(select(DodoWebhookEvent).where(DodoWebhookEvent.event_id == webhook_id)):
         return {"ok": True, "duplicate": True}
     try:
         payload = json.loads(body)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Invalid Razorpay payload") from exc
-    event_name = str(payload.get("event") or "")
+        raise HTTPException(status_code=400, detail="Invalid Dodo Payments payload") from exc
+    event_name = str(payload.get("type") or "")
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     if event_name in HANDLED_EVENTS:
-        container = payload.get("payload") or {}
-        if event_name == "payment.failed":
-            entity = ((container.get("payment") or {}).get("entity")) or {}
-        else:
-            entity = ((container.get("subscription") or {}).get("entity")) or {}
-        _apply_event(db, event_name, entity)
-    db.add(RazorpayWebhookEvent(id=new_id(), event_id=event_id, event=event_name or "unknown"))
-    db.commit()
+        _apply_event(db, event_name, data)
+    db.add(DodoWebhookEvent(id=new_id(), event_id=webhook_id, event=event_name or "unknown"))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return {"ok": True, "duplicate": True}
     return {"ok": True}

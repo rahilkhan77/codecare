@@ -64,27 +64,27 @@ def test_fake_smtp_records_message_without_a_server():
     assert len(OUTBOX) == before + 1
 
 
-def test_mocked_razorpay_checkout_returns_subscription_id(client, monkeypatch):
+def test_mocked_dodo_checkout_returns_hosted_url(client, monkeypatch):
     from codecare.config import get_settings
     from tests.conftest import register
 
     register(client, "billing@example.com")
     settings = get_settings()
     monkeypatch.setattr(settings, "demo_mode", False)
-    monkeypatch.setattr(settings, "razorpay_key_id", "rzp_test_key")
-    monkeypatch.setattr(settings, "razorpay_key_secret", "rzp_test_secret")
-    monkeypatch.setattr(settings, "razorpay_plan_starter", "plan_starter")
+    monkeypatch.setattr(settings, "dodo_payments_api_key", "dodo_test_key")
+    monkeypatch.setattr(settings, "dodo_payments_environment", "test_mode")
+    monkeypatch.setattr(settings, "dodo_product_starter", "pdt_starter")
 
-    def fake_create(plan, organization_id, settings=None):
-        return {"id": "sub_sample"}
+    def fake_create(**kwargs):
+        return {"checkout_url": "https://checkout.dodopayments.com/session/chs_sample", "session_id": "chs_sample"}
 
-    monkeypatch.setattr("codecare.routers.billing.razorpay.create_subscription", fake_create)
+    monkeypatch.setattr("codecare.routers.billing.dodo.create_checkout", fake_create)
     response = client.post("/api/v1/billing/checkout", json={"plan": "starter"})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["subscription_id"] == "sub_sample"
-    assert body["key_id"] == "rzp_test_key"
-    assert "razorpay_key_secret" not in body
+    assert body["url"].startswith("https://checkout.dodopayments.com/")
+    assert body["session_id"] == "chs_sample"
+    assert "dodo_test_key" not in response.text
 
 
 def test_fake_github_lists_only_mocked_repos(client, monkeypatch):

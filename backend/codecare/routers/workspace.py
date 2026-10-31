@@ -167,7 +167,7 @@ def settings_get(auth: AuthContext = Depends(current_auth), db: Session = Depend
         },
         "ai": {"provider": "configured" if (settings.groq_api_key or settings.openai_api_key or settings.anthropic_api_key) else "heuristic"},
         "billing": {
-            "razorpay_configured": settings.razorpay_configured,
+            "dodo_configured": settings.dodo_configured,
             "plan": sub.plan if sub else "none",
             "status": sub.status if sub else "inactive",
         },

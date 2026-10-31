@@ -46,12 +46,12 @@ class Settings(BaseSettings):
     sandbox_cpus: str = "1"
     sandbox_pids_limit: int = 128
 
-    razorpay_key_id: str = ""
-    razorpay_key_secret: str = ""
-    razorpay_webhook_secret: str = ""
-    razorpay_plan_starter: str = ""
-    razorpay_plan_indie: str = ""
-    razorpay_plan_studio: str = ""
+    dodo_payments_api_key: str = ""
+    dodo_payments_webhook_secret: str = ""
+    dodo_payments_environment: str = "test_mode"
+    dodo_product_starter: str = ""
+    dodo_product_indie: str = ""
+    dodo_product_studio: str = ""
 
     cookie_name: str = "codecare_session"
     cookie_domain: str = ""
@@ -89,8 +89,12 @@ class Settings(BaseSettings):
         return bool(self.smtp_host.strip())
 
     @property
-    def razorpay_configured(self) -> bool:
-        return bool(self.razorpay_key_id and self.razorpay_key_secret and self.razorpay_plan_starter)
+    def dodo_configured(self) -> bool:
+        return bool(
+            self.dodo_payments_api_key
+            and self.dodo_payments_environment in {"test_mode", "live_mode"}
+            and self.dodo_product_starter
+        )
 
     @property
     def supabase_configured(self) -> bool:

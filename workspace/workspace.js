@@ -1,14 +1,3 @@
-function loadRazorpay() {
-  if (window.Razorpay) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Razorpay Checkout failed to load"));
-    document.head.appendChild(script);
-  });
-}
-
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
@@ -321,7 +310,7 @@ if (viewRoot) {
         });
       }
       if (state.demo) {
-        viewRoot.insertAdjacentHTML("afterbegin", banner("Demo mode. Every record in this workspace is sample data and is labeled [Sample]. GitHub, Razorpay, and AI were not contacted."));
+        viewRoot.insertAdjacentHTML("afterbegin", banner("Demo mode. Every record in this workspace is sample data and is labeled [Sample]. GitHub, Dodo Payments, and AI were not contacted."));
       }
       if (state.me && !state.me.email_verified) {
         const note = sessionStorage.getItem("codecare-email-note");
@@ -674,12 +663,12 @@ if (viewRoot) {
       (await api("/api/v1/billing/status")).json(),
     ]);
     viewRoot.innerHTML = `
-      <div class="dash-heading"><div><h2>Billing</h2><p class="dash-subtitle">Paid access is determined on the server from Razorpay, in USD. This page cannot grant a plan by itself.</p></div></div>
-      <p>Status: <b>${esc(status.status || "inactive")}</b>${status.cancel_at_period_end ? " · cancels at period end" : ""}</p>
-      ${status.demo_billing ? banner("Demo billing is on. Plan changes are recorded locally. Razorpay was not charged.") : status.checkout_enabled ? "" : banner("Razorpay is not configured. Checkout is disabled until RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and RAZORPAY_PLAN_STARTER are set.")}
+      <div class="dash-heading"><div><h2>Billing</h2><p class="dash-subtitle">Paid access is determined on the server from Dodo Payments, in USD. Dodo is the merchant of record. This page cannot grant a plan by itself.</p></div></div>
+      <p>Status: <b>${esc(status.status || "inactive")}</b>${status.cancel_at_period_end ? " · cancels at the next billing date" : ""}</p>
+      ${status.demo_billing ? banner("Demo billing is on. Plan changes are recorded locally. Dodo Payments was not charged.") : status.checkout_enabled ? "" : banner("Dodo Payments is not configured. Checkout is disabled until DODO_PAYMENTS_API_KEY and DODO_PRODUCT_STARTER are set.")}
       ${canWrite() ? "" : `<p class="role-note">Billing changes require an owner or admin.</p>`}
       <p>Current plan: <b>${esc(status.plan)}</b> (${esc(status.status)})</p>
-      ${canWrite() && (status.checkout_enabled || status.demo_billing) ? `<div class="action-row"><button class="button button-dark" id="cancel-sub" type="button">Cancel at period end</button></div>` : ""}
+      ${canWrite() && (status.checkout_enabled || status.demo_billing) ? `<div class="action-row"><button class="button button-dark" id="cancel-sub" type="button">Cancel at next billing date</button><button class="text-link" id="open-portal" type="button">Customer portal</button></div>` : ""}
       ${plans.plans.map((plan) => `
         <article class="panel" style="margin-top:10px">
           <h3>${esc(plan.name)}</h3>
@@ -693,40 +682,19 @@ if (viewRoot) {
         const response = await api("/api/v1/billing/checkout", { method: "POST", body: JSON.stringify({ plan: button.dataset.plan }) });
         const data = await response.json();
         if (!response.ok) return showNotice(errorDetail(data, "Checkout did not start."));
-        if (data.demo) return showNotice(data.detail || "Demo plan recorded.", false);
-        try {
-          await loadRazorpay();
-        } catch {
-          return showNotice("Razorpay Checkout could not be loaded.");
-        }
-        const checkout = new window.Razorpay({
-          key: data.key_id,
-          subscription_id: data.subscription_id,
-          name: data.name || "CodeCare",
-          description: data.description || "Monthly maintenance",
-          handler: async (payment) => {
-            const verified = await api("/api/v1/billing/verify", {
-              method: "POST",
-              body: JSON.stringify({
-                razorpay_payment_id: payment.razorpay_payment_id,
-                razorpay_subscription_id: payment.razorpay_subscription_id,
-                razorpay_signature: payment.razorpay_signature,
-              }),
-            });
-            const result = await verified.json().catch(() => ({}));
-            if (!verified.ok) return showNotice(errorDetail(result, "Payment signature was rejected."));
-            showNotice(`Subscription active on ${result.plan}.`, false);
-            render();
-          },
-          modal: { ondismiss: () => showNotice("Checkout closed before payment.") },
-        });
-        checkout.open();
+        if (data.demo) return showNotice(data.detail || "Demo plan recorded. Dodo Payments was not charged.", false);
+        if (!data.url) return showNotice("Checkout did not return a Dodo Payments URL.");
+        window.location.assign(data.url);
       });
     });
     viewRoot.querySelectorAll("[data-change]").forEach((button) => {
       button.addEventListener("click", async () => {
         const response = await api("/api/v1/billing/change-plan", { method: "POST", body: JSON.stringify({ plan: button.dataset.change }) });
         const data = await response.json();
+        if (response.ok && data.url) {
+          window.location.assign(data.url);
+          return;
+        }
         showNotice(data.detail || (data.ok ? "Plan updated." : "Plan was not changed."), !response.ok);
       });
     });
@@ -734,6 +702,14 @@ if (viewRoot) {
       const response = await api("/api/v1/billing/cancel", { method: "POST" });
       const data = await response.json();
       showNotice(data.detail || (response.ok ? "Cancellation recorded." : "Cancellation did not complete."), !response.ok);
+      if (response.ok) render();
+    });
+    document.querySelector("#open-portal")?.addEventListener("click", async () => {
+      const response = await api("/api/v1/billing/portal", { method: "POST" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return showNotice(errorDetail(data, "The customer portal did not open."));
+      if (!data.url) return showNotice("Dodo Payments did not return a portal link.");
+      window.location.assign(data.url);
     });
   }
 

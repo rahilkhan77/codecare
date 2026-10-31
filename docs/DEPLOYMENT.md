@@ -66,4 +66,4 @@ Health check path: `/readyz`.
 
 ## What stays off until credentials exist
 
-GitHub App, Razorpay, SMTP, and hosted AI keys are listed in `.env.example` and `docs/ENVIRONMENT.md`. The app reports those integrations as not configured and does not invent a successful connection.
+GitHub App, Dodo Payments, SMTP, and hosted AI keys are listed in `.env.example` and `docs/ENVIRONMENT.md`. The app reports those integrations as not configured and does not invent a successful connection.

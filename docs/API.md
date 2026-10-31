@@ -96,10 +96,10 @@ Roles: `owner` and `admin` can connect repositories, run scans, propose and veri
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/api/v1/billing/status` | Server-side subscription |
-| POST | `/api/v1/billing/checkout` | Creates a Razorpay subscription. 503 if keys are missing. Demo mode records a local plan and says Razorpay was not charged |
-| POST | `/api/v1/billing/verify` | Checks the Checkout.js payment signature |
-| POST | `/api/v1/billing/change-plan` | Razorpay subscription update. Upgrades apply now. Downgrades apply at cycle end |
-| POST | `/api/v1/billing/cancel` | Cancels the Razorpay subscription at cycle end |
-| POST | `/api/v1/webhooks/razorpay` | Verifies `X-Razorpay-Signature`. Idempotent on `x-razorpay-event-id` |
+| POST | `/api/v1/billing/checkout` | Creates a Dodo hosted checkout session and returns `url`. 503 if keys are missing. Demo mode records a local plan and says Dodo Payments was not charged |
+| POST | `/api/v1/billing/portal` | Returns a Dodo customer portal link. 503 if keys are missing. 400 in demo mode |
+| POST | `/api/v1/billing/change-plan` | Dodo change-plan API. Upgrades apply immediately. Downgrades apply on the next billing date |
+| POST | `/api/v1/billing/cancel` | Sets cancel at the next billing date. Access stays on until that date |
+| POST | `/api/v1/webhooks/dodo` | Verifies Standard Webhooks headers `webhook-id`, `webhook-signature`, and `webhook-timestamp`. Idempotent on `webhook-id` |
 
-Plan catalog, in USD: Starter $29 (1 app), Indie $79 (5 apps), Studio $199 (unlimited). Checkout stays disabled until `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_PLAN_STARTER` are set.
+Plan catalog, in USD: Starter $29 (1 app), Indie $79 (5 apps), Studio $199 (unlimited). Dodo Payments is the merchant of record. Checkout stays disabled until `DODO_PAYMENTS_API_KEY` and `DODO_PRODUCT_STARTER` are set. Return URL: `https://codecare.si/workspace`.

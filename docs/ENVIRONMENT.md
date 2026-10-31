@@ -94,11 +94,13 @@ Suggested production from-address: `CodeCare <noreply@codecare.si>`.
 
 `DEMO_MODE=false` by default. Set `DEMO_MODE=true` only in development. Startup creates `demo@codecare.si` / `demo-review-pass` and a workspace whose scan, issue, fix, verification, and pull request are prefixed `[Sample]`. Production refuses to boot when demo mode is on. See [DEPLOYMENT.md](DEPLOYMENT.md) for the VPS and hosted-platform steps.
 
-## Razorpay
+## Dodo Payments
 
-Subscriptions are billed in **USD**. Razorpay can charge international cards in USD when that is enabled on the account. CodeCare does not show or convert INR. Create the Starter, Indie, and Studio plans in USD in the Razorpay dashboard and put their ids in `RAZORPAY_PLAN_STARTER`, `RAZORPAY_PLAN_INDIE`, and `RAZORPAY_PLAN_STUDIO`.
+Subscriptions are billed in **USD**. Dodo Payments is the merchant of record. Create three monthly subscription products: Starter $29, Indie $79, and Studio $199. Set each product's subscription period to 20 years so it renews until the customer cancels. Put the product ids in `DODO_PRODUCT_STARTER`, `DODO_PRODUCT_INDIE`, and `DODO_PRODUCT_STUDIO`.
 
-Checkout stays HTTP 503 until `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_PLAN_STARTER` are set. The browser opens Razorpay Checkout.js with the `subscription_id` from `POST /api/v1/billing/checkout`. `POST /api/v1/billing/verify` checks the payment signature. Entitlements follow `POST /api/v1/webhooks/razorpay`, which checks `X-Razorpay-Signature`. Demo mode never calls Razorpay and says so.
+`DODO_PAYMENTS_API_KEY` is the API key. `DODO_PAYMENTS_ENVIRONMENT` is `test_mode` or `live_mode`. `DODO_PAYMENTS_WEBHOOK_SECRET` is the Standard Webhooks signing secret for `https://codecare.si/api/v1/webhooks/dodo`.
+
+Checkout stays HTTP 503 until the API key and `DODO_PRODUCT_STARTER` are set. `POST /api/v1/billing/checkout` creates a Dodo hosted checkout session and the browser redirects to `checkout_url`, with `return_url` `https://codecare.si/workspace`. Entitlements follow the webhook, which checks `webhook-id`, `webhook-timestamp`, and `webhook-signature`. Upgrades use the change-plan API immediately. Downgrades take effect on the next billing date. Cancel sets `cancel_at_next_billing_date`. `POST /api/v1/billing/portal` returns a 24-hour customer portal link. Demo mode never calls Dodo and says "Dodo Payments was not charged."
 
 ## Supabase
 

@@ -1,6 +1,6 @@
 # CodeCare architecture
 
-Status: implemented as an MVP platform around the existing static marketing site. Capabilities that depend on external credentials stay disabled until those credentials exist. The product never reports a successful GitHub, AI, Razorpay, or sandbox integration unless that system is actually configured and the operation succeeded.
+Status: implemented as an MVP platform around the existing static marketing site. Capabilities that depend on external credentials stay disabled until those credentials exist. The product never reports a successful GitHub, AI, Dodo Payments, or sandbox integration unless that system is actually configured and the operation succeeded.
 
 ## Existing frontend (unchanged product)
 
@@ -31,7 +31,7 @@ FastAPI  (/api/v1)
   ├── AI provider abstraction
   ├── Docker sandbox (never host execution of customer code)
   ├── Redis job queue when configured; in-process worker otherwise
-  └── Razorpay Subscriptions in USD (disabled until keys are present)
+  └── Dodo Payments subscriptions in USD (disabled until keys are present)
 ```
 
 PostgreSQL is the system of record. Redis is optional. Docker is required for verification of untrusted repository code; if Docker is unavailable, verification is marked `inconclusive` and no pull request is opened automatically.
@@ -51,21 +51,21 @@ PostgreSQL is the system of record. Redis is optional. Docker is required for ve
 | Verification | `verified` / `failed` / `inconclusive` only from real check results |
 | Pull requests | Created only after successful verification (or explicit unsafe override is not offered) |
 | Monitoring | Scan history, issue states, GitHub workflow failures, dependency health |
-| Billing | Razorpay Subscriptions in USD; Checkout.js plus signed webhooks |
+| Billing | Dodo Payments subscriptions in USD; hosted checkout plus signed webhooks |
 | Notifications | In-app records for scan/fix/PR/billing events |
 | Audit | Security-relevant actions |
 
 ## Trust boundaries
 
-- Access tokens, GitHub App private keys, and the Razorpay key secret never leave the API process.
+- Access tokens, GitHub App private keys, and the Dodo Payments API key never leave the API process.
 - Tenant queries are always scoped by organization membership.
 - Untrusted repository code runs only in the sandbox image, with `--network none`.
 - AI output is a proposal. Verification is a separate, non-AI step.
-- Billing access is derived from `subscriptions` rows written by Razorpay webhooks, not from the frontend.
+- Billing access is derived from `subscriptions` rows written by Dodo Payments webhooks, not from the frontend.
 
 ## What this MVP does not claim
 
 - Production/runtime APM or live HTTP monitoring of customer apps
 - Automatic merge or deploy
-- Purchasable plans until Razorpay keys and USD plan IDs are configured
+- Purchasable plans until Dodo Payments keys and USD product IDs are configured
 - That an AI fix is correct because a model said so

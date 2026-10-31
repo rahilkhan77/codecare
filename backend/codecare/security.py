@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import hmac
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -159,19 +162,55 @@ def verify_github_signature(secret: str, body: bytes, header: str) -> bool:
     return hmac.compare_digest(expected, header)
 
 
-def verify_razorpay_webhook(secret: str, body: bytes, signature: str) -> bool:
-    if not secret or not signature:
-        return False
-    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
+def _standard_webhook_key(secret: str) -> bytes | None:
+    raw = secret.strip()
+    if raw.startswith("whsec_"):
+        raw = raw[len("whsec_") :]
+    if not raw:
+        return None
+    try:
+        key = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return key or None
 
 
-def verify_razorpay_payment(secret: str, payment_id: str, subscription_id: str, signature: str) -> bool:
-    if not secret or not payment_id or not subscription_id or not signature:
+def verify_standard_webhook(
+    secret: str,
+    body: bytes,
+    webhook_id: str,
+    webhook_timestamp: str,
+    webhook_signature: str,
+    *,
+    tolerance_seconds: int = 300,
+    now: int | None = None,
+) -> bool:
+    """Verify a Standard Webhooks signature (webhook-id, webhook-timestamp, webhook-signature)."""
+    if not secret or not webhook_id or not webhook_timestamp or not webhook_signature:
         return False
-    message = f"{payment_id}|{subscription_id}".encode()
-    expected = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
+    key = _standard_webhook_key(secret)
+    if key is None:
+        return False
+    try:
+        timestamp = int(webhook_timestamp)
+    except ValueError:
+        return False
+    current = int(time.time()) if now is None else now
+    if tolerance_seconds >= 0 and abs(current - timestamp) > tolerance_seconds:
+        return False
+    signed = f"{webhook_id}.{webhook_timestamp}.".encode() + body
+    digest = hmac.new(key, signed, hashlib.sha256).digest()
+    for part in webhook_signature.split():
+        version, separator, signature = part.partition(",")
+        if version != "v1" or not separator or not signature:
+            continue
+        try:
+            candidate = base64.b64decode(signature, validate=True)
+        except (binascii.Error, ValueError):
+            continue
+        if hmac.compare_digest(digest, candidate):
+            return True
+    return False
 
 
 def redact(text: str) -> str:

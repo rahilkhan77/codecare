@@ -1,14 +1,14 @@
 from tests.conftest import register
 
 
-def test_billing_disabled_without_razorpay(client):
+def test_billing_disabled_without_dodo(client):
     register(client)
     plans = client.get("/api/v1/billing/plans")
     assert plans.json()["checkout_enabled"] is False
     assert plans.json()["currency"] == "USD"
     checkout = client.post("/api/v1/billing/checkout", json={"plan": "starter"})
     assert checkout.status_code == 503
-    assert "Razorpay" in checkout.json()["detail"]
+    assert "Dodo Payments" in checkout.json()["detail"]
 
 
 def test_contact_persists(client):

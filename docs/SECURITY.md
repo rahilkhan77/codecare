@@ -41,9 +41,9 @@
 
 ## Billing
 
-- Checkout requires Razorpay keys. The key secret never goes to the browser.
-- Payment signatures and `X-Razorpay-Signature` are checked with HMAC-SHA256.
-- Entitlements come from `subscriptions` rows written by verified webhooks, not from the frontend.
+- Checkout requires a Dodo Payments API key. That key never goes to the browser. Checkout is a redirect to Dodo hosted checkout.
+- Webhooks follow the Standard Webhooks spec. The API checks `webhook-id`, `webhook-timestamp`, and `webhook-signature`, and stores `webhook-id` so a delivery is applied once.
+- Entitlements come from `subscriptions` rows written by verified webhooks, not from the frontend. Dodo Payments is the merchant of record.
 
 ## Other controls
 
@@ -67,7 +67,7 @@
 | Security misconfiguration | Production startup checks. CSP, HSTS, no wildcard CORS. Demo mode cannot run in production. |
 | Vulnerable components | `pip-audit` is part of review. Pin runtime dependencies in `backend/requirements.txt`. |
 | Identification and authentication failures | Rate limits, session revocation, CSRF, email verification, reset tokens stored as SHA-256. |
-| Software and data integrity | Razorpay and GitHub webhooks verify signatures. Sandbox does not run install scripts from customer packages. |
+| Software and data integrity | Dodo Payments and GitHub webhooks verify signatures. Sandbox does not run install scripts from customer packages. |
 | Security logging failures | Audit log for auth, GitHub, scans, fixes, pull requests, and billing. Logs redact secrets. |
 | SSRF | GitHub calls go to `api.github.com` with server credentials. AI calls go only to the configured provider host. |
 
