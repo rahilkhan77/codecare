@@ -78,20 +78,21 @@ def main() -> int:
         status_line("groq", "skipped", "GROQ_API_KEY is not set")
     else:
         try:
+            model = env.get("GROQ_MODEL") or "openai/gpt-oss-120b"
             response = httpx.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {groq_key}"},
                 json={
-                    "model": env.get("GROQ_MODEL") or "allam-2-7b",
+                    "model": model,
                     "messages": [{"role": "user", "content": "Reply with the single word ok."}],
                     "max_tokens": 16,
                 },
-                timeout=40,
+                timeout=60,
             )
             if response.status_code == 200:
-                status_line("groq", "passed", "chat completion returned HTTP 200")
+                status_line("groq", "passed", f"chat completion with {model} returned HTTP 200")
             else:
-                status_line("groq", "failed", f"HTTP {response.status_code}")
+                status_line("groq", "failed", f"{model} returned HTTP {response.status_code}")
         except Exception as exc:
             status_line("groq", "failed", redact(exc.__class__.__name__, secrets))
 

@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: str = ""
-    groq_model: str = "allam-2-7b"
+    groq_model: str = "openai/gpt-oss-120b"
 
     sandbox_image: str = "codecare-sandbox:local"
     sandbox_timeout_seconds: int = 120
