@@ -43,6 +43,93 @@ def status_line(name: str, outcome: str, detail: str) -> None:
     print(f"{name}: {outcome} — {detail}")
 
 
+def check_github_app(secrets: list[str], has_private_key: bool) -> None:
+    """Mint an App JWT and, when an installation exists, list repos. No writes."""
+    if not has_private_key:
+        status_line("github_app_jwt", "skipped", "private key is not set")
+        status_line("github_installations", "skipped", "private key is not set")
+        status_line("github_installation_token", "skipped", "private key is not set")
+        status_line("github_repo_list", "skipped", "private key is not set")
+        return
+    from codecare.config import get_settings
+    from codecare.services.github import github_app_jwt
+
+    get_settings.cache_clear()
+    settings = get_settings()
+    try:
+        app_jwt = github_app_jwt(settings)
+    except Exception as exc:
+        status_line("github_app_jwt", "failed", redact(f"{exc.__class__.__name__}", secrets))
+        status_line("github_installations", "skipped", "JWT was not minted")
+        status_line("github_installation_token", "skipped", "JWT was not minted")
+        status_line("github_repo_list", "skipped", "JWT was not minted")
+        return
+    status_line("github_app_jwt", "passed", "App JWT minted")
+    headers = {
+        "Authorization": f"Bearer {app_jwt}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "CodeCare-Maintenance",
+    }
+    try:
+        listed = httpx.get(
+            "https://api.github.com/app/installations",
+            headers=headers,
+            params={"per_page": 100},
+            timeout=30,
+        )
+    except Exception as exc:
+        status_line("github_installations", "failed", exc.__class__.__name__)
+        status_line("github_installation_token", "skipped", "installation list failed")
+        status_line("github_repo_list", "skipped", "installation list failed")
+        return
+    if listed.status_code != 200:
+        status_line("github_installations", "failed", f"HTTP {listed.status_code}")
+        status_line("github_installation_token", "skipped", "installation list failed")
+        status_line("github_repo_list", "skipped", "installation list failed")
+        return
+    installations = listed.json() if isinstance(listed.json(), list) else []
+    status_line("github_installations", "passed", f"{len(installations)} installation(s)")
+    if not installations:
+        status_line("github_installation_token", "skipped", "no installations")
+        status_line("github_repo_list", "skipped", "no installations")
+        return
+    installation_id = installations[0].get("id")
+    try:
+        minted = httpx.post(
+            f"https://api.github.com/app/installations/{installation_id}/access_tokens",
+            headers=headers,
+            timeout=30,
+        )
+    except Exception as exc:
+        status_line("github_installation_token", "failed", exc.__class__.__name__)
+        status_line("github_repo_list", "skipped", "installation token was not minted")
+        return
+    if minted.status_code != 201:
+        status_line("github_installation_token", "failed", f"HTTP {minted.status_code}")
+        status_line("github_repo_list", "skipped", "installation token was not minted")
+        return
+    access_token = str((minted.json() or {}).get("token") or "")
+    status_line("github_installation_token", "passed", "token minted; no repository writes")
+    repo_headers = dict(headers)
+    repo_headers["Authorization"] = f"Bearer {access_token}"
+    try:
+        repos = httpx.get(
+            "https://api.github.com/installation/repositories",
+            headers=repo_headers,
+            params={"per_page": 100},
+            timeout=30,
+        )
+    except Exception as exc:
+        status_line("github_repo_list", "failed", exc.__class__.__name__)
+        return
+    if repos.status_code != 200:
+        status_line("github_repo_list", "failed", f"HTTP {repos.status_code}")
+        return
+    total = (repos.json() or {}).get("total_count")
+    status_line("github_repo_list", "passed", f"{total} repo(s) listed; no pulls or pushes")
+
+
 def main() -> int:
     env = load_env(ENV_FILE)
     secrets = [value for value in env.values() if value]
@@ -108,10 +195,7 @@ def main() -> int:
         except Exception as exc:
             status_line("resend", "failed", redact(exc.__class__.__name__, secrets))
 
-    if not private_key.strip():
-        status_line("github_installation_token", "skipped", "GITHUB_APP_PRIVATE_KEY is not set")
-    else:
-        status_line("github_installation_token", "skipped", "private key is present but this check does not mint installation tokens")
+    check_github_app(secrets, bool(private_key.strip() or env.get("GITHUB_APP_PRIVATE_KEY_PATH", "").strip()))
 
     if not app_id and not client_id:
         status_line("github_app", "skipped", "GitHub App id and client id are not set")
