@@ -22,22 +22,28 @@ def test_repo_list_empty(client):
 def test_tenant_scan_isolation(client):
     register(client)
     from codecare.db import SessionLocal
-    from codecare.models import OrganizationMember
+    from codecare.models import Organization, Profile
 
     db = SessionLocal()
-    member = db.query(OrganizationMember).first()
-    other_org = "11111111-1111-1111-1111-111111111111"
+
+    other_owner = Profile(id=new_id(), email="other@example.com", full_name="Other")
+    db.add(other_owner)
+    db.flush()
+    other = Organization(id=new_id(), name="Other", slug=f"other-{other_owner.id[:8]}", owner_id=other_owner.id)
+    db.add(other)
+    db.flush()
     repo = Repository(
         id=new_id(),
-        organization_id=other_org,
+        organization_id=other.id,
         github_repo_id="99",
         full_name="other/repo",
     )
     db.add(repo)
+    db.flush()
     db.add(
         DetectedIssue(
             id=new_id(),
-            organization_id=other_org,
+            organization_id=other.id,
             repository_id=repo.id,
             fingerprint="abc",
             title="secret",

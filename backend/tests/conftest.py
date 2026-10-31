@@ -8,9 +8,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["APP_SECRET"] = "test-secret-key-please-change"
+os.environ["APP_SECRET"] = "test-secret-key-please-change-now"
 os.environ["GITHUB_WEBHOOK_SECRET"] = "webhook-secret"
-os.environ["CREDENTIALS_ENCRYPTION_KEY"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+os.environ["FERNET_KEY"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+os.environ["FERNET_KEY_PREVIOUS"] = ""
+os.environ["RESEND_API_KEY"] = ""
+os.environ["GROQ_API_KEY"] = ""
+os.environ["GITHUB_APP_ID"] = ""
+os.environ["GITHUB_APP_CLIENT_ID"] = ""
+os.environ["GITHUB_APP_CLIENT_SECRET"] = ""
+os.environ["GITHUB_APP_PRIVATE_KEY"] = ""
+os.environ["GITHUB_APP_SLUG"] = "codecare-ai"
+os.environ["DODO_PAYMENTS_API_KEY"] = ""
+os.environ["SMTP_HOST"] = ""
+os.environ["DEMO_MODE"] = "false"
 
 from collections.abc import Generator  # noqa: E402
 
@@ -19,14 +30,33 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from codecare.db import Base, engine  # noqa: E402
 from codecare.main import app  # noqa: E402
+from codecare.services.email import reset_outbox  # noqa: E402
+
+CSRF_EXEMPT_PREFIXES = ("/api/v1/webhooks/",)
+
+
+class CSRFClient(TestClient):
+    def request(self, method, url, **kwargs):
+        method_name = method.upper()
+        path = url.split("?", 1)[0]
+        if method_name not in {"GET", "HEAD", "OPTIONS"} and not path.startswith(CSRF_EXEMPT_PREFIXES):
+            if "codecare_csrf" not in self.cookies:
+                super().request("GET", "/api/v1/auth/csrf")
+            token = self.cookies.get("codecare_csrf")
+            headers = dict(kwargs.get("headers") or {})
+            headers.setdefault("X-CSRF-Token", token or "")
+            kwargs["headers"] = headers
+        return super().request(method, url, **kwargs)
 
 
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
+def client() -> Generator[CSRFClient, None, None]:
+    reset_outbox()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    with TestClient(app) as test_client:
+    with CSRFClient(app) as test_client:
         yield test_client
+    reset_outbox()
 
 
 def register(client: TestClient, email: str = "jamie@example.com") -> dict:

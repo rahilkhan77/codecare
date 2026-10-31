@@ -1,5 +1,9 @@
 .env
 .env.local
+.env.*
+!.env.example
+backend/.env
+deploy/.env
 *.pem
 *.key
 .venv/
@@ -23,3 +27,4 @@ data/postgres/
 data/redis/
 backend/test.codecare.db
 codecare-dev.db
+backups/

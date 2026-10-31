@@ -4,6 +4,8 @@ import json
 import logging
 from datetime import datetime, timezone
 
+from codecare.security import redact
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -11,10 +13,10 @@ class JsonFormatter(logging.Formatter):
             "ts": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": redact(record.getMessage()),
         }
         if record.exc_info:
-            payload["exc_info"] = self.formatException(record.exc_info)
+            payload["exc_info"] = redact(self.formatException(record.exc_info))
         return json.dumps(payload)
 
 

@@ -24,8 +24,8 @@ def _settings(**kwargs) -> Settings:
     values = {
         "app_env": "development",
         "app_secret": "a" * 40,
-        "credentials_encryption_key": VALID_KEY,
-        "credentials_encryption_key_previous": "",
+        "fernet_key": VALID_KEY,
+        "fernet_key_previous": "",
         "database_url": "postgresql+psycopg2://codecare:codecare@localhost/codecare",
         "api_cors_origins": "http://127.0.0.1:8000",
     }
@@ -46,7 +46,7 @@ def test_expired_oauth_without_refresh_is_rejected():
 
 @pytest.mark.asyncio
 async def test_expired_token_refreshes(monkeypatch):
-    settings = _settings(credentials_encryption_key=VALID_KEY)
+    settings = _settings(fernet_key=VALID_KEY)
 
     async def fake_refresh(token):
         assert token == "refresh-old"
@@ -102,21 +102,21 @@ def test_invalid_encryption_key_rejected():
     with pytest.raises(EncryptionConfigError):
         parse_fernet_key("not-a-fernet-key")
     with pytest.raises(RuntimeError, match="Fernet"):
-        validate_settings(_settings(app_env="production", credentials_encryption_key="g" * 44))
+        validate_settings(_settings(app_env="production", fernet_key="g" * 44))
 
 
 def test_production_requires_dedicated_encryption_key():
-    with pytest.raises(RuntimeError, match="CREDENTIALS_ENCRYPTION_KEY"):
-        validate_settings(_settings(app_env="production", credentials_encryption_key=""))
+    with pytest.raises(RuntimeError, match="FERNET_KEY"):
+        validate_settings(_settings(app_env="production", fernet_key=""))
 
 
 def test_encryption_key_rotation():
-    previous_settings = _settings(credentials_encryption_key=PREVIOUS_KEY)
+    previous_settings = _settings(fernet_key=PREVIOUS_KEY)
     ciphertext = encrypt_secret("github-token", previous_settings)
-    rotated = _settings(credentials_encryption_key=CURRENT_KEY, credentials_encryption_key_previous=PREVIOUS_KEY)
+    rotated = _settings(fernet_key=CURRENT_KEY, fernet_key_previous=PREVIOUS_KEY)
     assert decrypt_secret(ciphertext, rotated) == "github-token"
     rewritten = reencrypt_secret(ciphertext, rotated)
-    current_only = _settings(credentials_encryption_key=CURRENT_KEY, credentials_encryption_key_previous="")
+    current_only = _settings(fernet_key=CURRENT_KEY, fernet_key_previous="")
     assert decrypt_secret(rewritten, current_only) == "github-token"
     with pytest.raises(ValueError):
         decrypt_secret(ciphertext, current_only)

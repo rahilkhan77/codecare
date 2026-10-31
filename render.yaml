@@ -1,0 +1,106 @@
+# Render blueprint. Database is the existing Neon DATABASE_URL. Do not add a Render Postgres.
+# Root directory for both services is backend/. SANDBOX_MODE=static because Render cannot run Docker.
+
+services:
+  - type: web
+    name: codecare-api
+    runtime: python
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn codecare.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /readyz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: APP_ENV
+        value: production
+      - key: PUBLIC_BASE_URL
+        value: https://codecare.si
+      - key: API_CORS_ORIGINS
+        value: https://codecare.si
+      - key: COOKIE_DOMAIN
+        value: .codecare.si
+      - key: DEMO_MODE
+        value: "false"
+      - key: CODECARE_DISABLE_WORKER
+        value: "1"
+      - key: SANDBOX_MODE
+        value: static
+      - key: EMAIL_FROM
+        value: "CodeCare <noreply@codecare.si>"
+      - key: GITHUB_APP_SLUG
+        value: codecare-ai
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: APP_SECRET
+        sync: false
+      - key: FERNET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_CLIENT_ID
+        sync: false
+      - key: GITHUB_APP_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+
+  - type: worker
+    name: codecare-worker
+    runtime: python
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m codecare.worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: APP_ENV
+        value: production
+      - key: PUBLIC_BASE_URL
+        value: https://codecare.si
+      - key: API_CORS_ORIGINS
+        value: https://codecare.si
+      - key: COOKIE_DOMAIN
+        value: .codecare.si
+      - key: DEMO_MODE
+        value: "false"
+      - key: CODECARE_DISABLE_WORKER
+        value: "0"
+      - key: SANDBOX_MODE
+        value: static
+      - key: EMAIL_FROM
+        value: "CodeCare <noreply@codecare.si>"
+      - key: GITHUB_APP_SLUG
+        value: codecare-ai
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: APP_SECRET
+        sync: false
+      - key: FERNET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_CLIENT_ID
+        sync: false
+      - key: GITHUB_APP_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false

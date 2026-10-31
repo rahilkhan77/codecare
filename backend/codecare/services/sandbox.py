@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import shutil
 import subprocess
@@ -10,6 +11,11 @@ from codecare.config import get_settings
 from codecare.security import redact
 
 FORBIDDEN_HOST_EXEC = "Customer repository code is never executed on the API host."
+LIMITED_VERIFICATION = (
+    "LIMITED VERIFICATION. The patch was parsed and was not executed. "
+    "This is not a verified sandbox run, so CodeCare will not open a pull request. "
+    "Full verification needs Docker (SANDBOX_MODE=docker) or a future remote sandbox (SANDBOX_MODE=remote). "
+)
 SITE_PACKAGES = ".codecare-site-packages"
 
 RUNTIME_COMMANDS = {
@@ -147,6 +153,8 @@ def _docker_argv(
         network,
         "--memory",
         settings.sandbox_memory,
+        "--memory-swap",
+        settings.sandbox_memory,
         "--cpus",
         str(settings.sandbox_cpus),
         "--pids-limit",
@@ -211,8 +219,79 @@ def classify_pytest(output: str, returncode: int) -> tuple[str, int, int]:
     return "inconclusive", 0, 0
 
 
+def _sandbox_mode(settings) -> str:
+    requested = (settings.sandbox_mode or "auto").strip().lower()
+    if requested not in {"auto", "docker", "static", "remote"}:
+        requested = "auto"
+    if requested == "auto":
+        if docker_available():
+            return "docker"
+        return "static"
+    return requested
+
+
+def _verify_static(files: dict[str, str]) -> dict:
+    """Parse a patch without importing or executing it."""
+    if not files:
+        return _result("limited", LIMITED_VERIFICATION + "No patch files were produced. " + FORBIDDEN_HOST_EXEC)
+    work = Path(tempfile.mkdtemp(prefix="codecare-static-"))
+    notes: list[str] = [LIMITED_VERIFICATION.strip(), FORBIDDEN_HOST_EXEC]
+    try:
+        apply_files(work, files)
+        if not patch_applied(work, files):
+            return _result("failed", "Proposed patch was not present on disk after apply. " + FORBIDDEN_HOST_EXEC)
+        errors: list[str] = []
+        parsed: list[str] = []
+        skipped: list[str] = []
+        for rel in files:
+            path = work / rel.replace("\\", "/").lstrip("/")
+            suffix = path.suffix.lower()
+            if suffix == ".py":
+                try:
+                    ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+                except SyntaxError as exc:
+                    errors.append(f"{rel}: {exc.msg} (line {exc.lineno})")
+                else:
+                    parsed.append(rel)
+            else:
+                skipped.append(rel)
+        if errors:
+            return _result(
+                "failed",
+                "\n".join(notes + ["Python syntax errors, code was not executed:"] + errors),
+            )
+        if parsed:
+            notes.append("Python files parsed with ast.parse: " + ", ".join(parsed))
+        if skipped:
+            notes.append(
+                "Not executed and not syntax-checked outside Docker: " + ", ".join(skipped)
+            )
+        notes.append("Tests were not run.")
+        return _result("limited", "\n".join(notes), verification="limited")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _verify_remote(settings) -> dict:
+    if not (settings.sandbox_remote_url or "").strip():
+        return _result(
+            "inconclusive",
+            "SANDBOX_MODE=remote but SANDBOX_REMOTE_URL is empty. No code was executed. " + FORBIDDEN_HOST_EXEC,
+        )
+    return _result(
+        "inconclusive",
+        "SANDBOX_REMOTE_URL is set, but the remote sandbox client is not implemented. "
+        "No patch was sent and no code was executed. " + FORBIDDEN_HOST_EXEC,
+    )
+
+
 def verify_patch(files: dict[str, str], commands: list[str] | None = None, work_dir: Path | None = None) -> dict:
     settings = get_settings()
+    mode = _sandbox_mode(settings)
+    if mode == "static":
+        return _verify_static(files)
+    if mode == "remote":
+        return _verify_remote(settings)
     if not docker_available():
         return _result("inconclusive", "Docker is not available. Verification did not run. " + FORBIDDEN_HOST_EXEC)
     if not docker_image_present(settings.sandbox_image):
