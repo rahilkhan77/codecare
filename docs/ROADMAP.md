@@ -12,7 +12,7 @@
 - PRs only after verified sandbox status
 - Dodo Payments hosted checkout, customer portal, cancel at the next billing date, and plan changes; signed webhooks; disabled without keys
 - Rate limits, production secret and Fernet checks, readiness probe, structured logging in production
-- Encryption key rotation via `CREDENTIALS_ENCRYPTION_KEY_PREVIOUS`
+- Encryption key rotation via `FERNET_KEY_PREVIOUS`
 
 ## Blocked on operator credentials / infrastructure
 

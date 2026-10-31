@@ -91,7 +91,7 @@ def install_url(auth: AuthContext = Depends(require_roles("owner", "admin")), db
     state = secrets.token_urlsafe(24)
     db.add(OauthState(id=new_id(), state=state, profile_id=auth.profile.id, organization_id=auth.organization_id))
     db.commit()
-    slug = settings.github_app_slug or "codecare"
+    slug = settings.github_app_slug or "codecare-ai"
     url = f"https://github.com/apps/{slug}/installations/new?state={state}"
     return {"url": url}
 

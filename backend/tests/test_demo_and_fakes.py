@@ -56,6 +56,33 @@ def test_heuristic_still_refuses_to_invent_a_patch():
     assert "did not generate a patch" in summary
 
 
+def test_resend_sends_from_codecare_and_skips_smtp(monkeypatch):
+    from codecare.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "resend_api_key", "re_test_key")
+    monkeypatch.setattr(settings, "smtp_host", "smtp.example")
+    monkeypatch.setattr(settings, "email_from", "CodeCare <noreply@codecare.si>")
+    seen = {}
+
+    class Response:
+        status_code = 200
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        seen["url"] = url
+        seen["json"] = json
+        seen["authorization"] = (headers or {}).get("Authorization", "")
+        return Response()
+
+    monkeypatch.setattr("codecare.services.email.httpx.post", fake_post)
+    mode = deliver(OutboundEmail(to="review@codecare.si", subject="Hello", text="body"))
+    assert mode == "resend"
+    assert seen["url"].endswith("/emails")
+    assert seen["json"]["from"] == "CodeCare <noreply@codecare.si>"
+    assert seen["authorization"].startswith("Bearer ")
+    assert "re_test_key" not in seen["json"]["text"]
+
+
 def test_fake_smtp_records_message_without_a_server():
     before = len(OUTBOX)
     mode = deliver(OutboundEmail(to="review@codecare.si", subject="[Sample] Hello", text="console only"))
@@ -151,7 +178,7 @@ def test_production_rejects_demo_mode():
             _settings(
                 app_env="production",
                 app_secret="a" * 40,
-                credentials_encryption_key=VALID_FERNET,
+                fernet_key=VALID_FERNET,
                 database_url="postgresql+psycopg2://codecare:codecare@localhost/codecare",
                 public_base_url="https://codecare.si",
                 api_cors_origins="https://codecare.si",

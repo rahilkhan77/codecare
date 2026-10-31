@@ -10,21 +10,21 @@ A small VM (2 vCPU, 4 GB RAM) with Docker and a public IPv4 is enough to start. 
 
 1. Install Docker Engine and the Compose plugin.
 2. Clone the repository and check out the release you intend to run.
-3. Copy `.env.example` to `.env`.
+3. Copy `.env.example` to `backend/.env`. Do not commit it.
 4. Set at least:
    - `APP_SECRET` (32+ random characters)
-   - `CREDENTIALS_ENCRYPTION_KEY` (Fernet key)
+   - `FERNET_KEY` (Fernet key) in `backend/.env`
    - `POSTGRES_PASSWORD` (used by Compose for the database URL)
    - `APP_ENV=production`
    - `PUBLIC_BASE_URL=https://codecare.si`
-   - `API_CORS_ORIGINS=https://codecare.si,https://www.codecare.si`
+   - `API_CORS_ORIGINS=https://codecare.si`
    - `COOKIE_DOMAIN=.codecare.si`
    - `DEMO_MODE=false`
 5. Open TCP 80 and 443. Do not publish Postgres or Redis to the internet. The Compose file does not map those ports.
 6. Build the sandbox image on the worker host. Verification refuses to run without it:
 
 ```bash
-docker compose -f docker-compose.prod.yml --profile sandbox build sandbox
+docker compose -f deploy/docker-compose.prod.yml --profile sandbox build sandbox
 ```
 
 That image is `codecare-sandbox:local`, built from `sandbox/Dockerfile`.
@@ -32,7 +32,7 @@ That image is `codecare-sandbox:local`, built from `sandbox/Dockerfile`.
 7. Start the stack:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f deploy/docker-compose.prod.yml up -d --build
 ```
 
 The API container runs `alembic upgrade head` before uvicorn (`CODECARE_RUN_MIGRATIONS=1`). The worker starts only after `/readyz` is healthy. Caddy obtains certificates for `codecare.si` and redirects `www` to the apex.
@@ -44,10 +44,10 @@ The worker mounts `/var/run/docker.sock` and runs as root so it can start sandbo
 ### Backups
 
 ```bash
-docker compose -f docker-compose.prod.yml exec postgres pg_dump -U codecare codecare > codecare.sql
+docker compose -f deploy/docker-compose.prod.yml exec postgres pg_dump -U codecare codecare > codecare.sql
 ```
 
-Keep `CREDENTIALS_ENCRYPTION_KEY` with the backup. Database rows cannot be decrypted without it.
+Keep `FERNET_KEY` with the backup. Database rows cannot be decrypted without it. The key lives in `backend/.env`, which is gitignored.
 
 ## Render, Railway, or Fly
 

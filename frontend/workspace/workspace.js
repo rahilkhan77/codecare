@@ -665,7 +665,7 @@ if (viewRoot) {
     viewRoot.innerHTML = `
       <div class="dash-heading"><div><h2>Billing</h2><p class="dash-subtitle">Paid access is determined on the server from Dodo Payments, in USD. Dodo is the merchant of record. This page cannot grant a plan by itself.</p></div></div>
       <p>Status: <b>${esc(status.status || "inactive")}</b>${status.cancel_at_period_end ? " · cancels at the next billing date" : ""}</p>
-      ${status.demo_billing ? banner("Demo billing is on. Plan changes are recorded locally. Dodo Payments was not charged.") : status.checkout_enabled ? "" : banner("Dodo Payments is not configured. Checkout is disabled until DODO_PAYMENTS_API_KEY and DODO_PRODUCT_STARTER are set.")}
+      ${status.demo_billing ? banner("Demo billing is on. Plan changes are recorded locally. Dodo Payments was not charged.") : status.checkout_enabled ? "" : banner("Billing is coming soon.")}
       ${canWrite() ? "" : `<p class="role-note">Billing changes require an owner or admin.</p>`}
       <p>Current plan: <b>${esc(status.plan)}</b> (${esc(status.status)})</p>
       ${canWrite() && (status.checkout_enabled || status.demo_billing) ? `<div class="action-row"><button class="button button-dark" id="cancel-sub" type="button">Cancel at next billing date</button><button class="text-link" id="open-portal" type="button">Customer portal</button></div>` : ""}
@@ -675,7 +675,7 @@ if (viewRoot) {
           <p>${plan.monthly ? `$${plan.monthly}/month` : "Custom"} · ${plan.repos ? `${esc(plan.repos)} app${plan.repos === 1 ? "" : "s"}` : "unlimited apps"}</p>
           <p class="dash-subtitle">${esc(plan.blurb || "")}</p>
           ${plan.id !== "enterprise" && (status.checkout_enabled || status.demo_billing) && canWrite() ? `<button class="button button-dark" data-plan="${esc(plan.id)}" type="button">${status.demo_billing ? "Use this plan" : "Checkout"}</button>
-          <button class="text-link" data-change="${esc(plan.id)}" type="button">Change to this plan</button>` : ""}
+          <button class="text-link" data-change="${esc(plan.id)}" type="button">Change to this plan</button>` : plan.id !== "enterprise" && !status.checkout_enabled && !status.demo_billing ? `<p class="dash-subtitle">Coming soon</p>` : ""}
         </article>`).join("")}`;
     viewRoot.querySelectorAll("[data-plan]").forEach((button) => {
       button.addEventListener("click", async () => {

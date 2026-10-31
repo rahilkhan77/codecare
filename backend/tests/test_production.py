@@ -11,7 +11,7 @@ def _settings(**kwargs) -> Settings:
     values = {
         "app_env": "development",
         "app_secret": "dev-only-change-me",
-        "credentials_encryption_key": VALID_FERNET,
+        "fernet_key": VALID_FERNET,
         "database_url": "sqlite:///./x.db",
         "api_cors_origins": "http://127.0.0.1:8000",
     }
@@ -25,7 +25,7 @@ def test_production_rejects_weak_secret():
             _settings(
                 app_env="production",
                 app_secret="dev-only-change-me",
-                credentials_encryption_key=VALID_FERNET,
+                fernet_key=VALID_FERNET,
                 database_url="postgresql+psycopg2://codecare:codecare@localhost/codecare",
             )
         )
@@ -37,7 +37,7 @@ def test_production_rejects_sqlite():
             _settings(
                 app_env="production",
                 app_secret="a" * 40,
-                credentials_encryption_key=VALID_FERNET,
+                fernet_key=VALID_FERNET,
                 database_url="sqlite:///./x.db",
             )
         )
@@ -53,7 +53,7 @@ def test_production_requires_https_public_url():
             _settings(
                 app_env="production",
                 app_secret="a" * 40,
-                credentials_encryption_key=VALID_FERNET,
+                fernet_key=VALID_FERNET,
                 database_url="postgresql+psycopg2://codecare:codecare@localhost/codecare",
                 public_base_url="http://codecare.si",
                 api_cors_origins="https://codecare.si",
@@ -63,13 +63,36 @@ def test_production_requires_https_public_url():
         _settings(
             app_env="production",
             app_secret="a" * 40,
-            credentials_encryption_key=VALID_FERNET,
+            fernet_key=VALID_FERNET,
             database_url="postgresql+psycopg2://codecare:codecare@localhost/codecare",
             public_base_url="https://codecare.si",
-            api_cors_origins="https://codecare.si,https://www.codecare.si",
+            api_cors_origins="https://codecare.si",
             cookie_domain=".codecare.si",
         )
     )
+
+
+def test_production_rejects_extra_cors_origin():
+    with pytest.raises(RuntimeError, match="CORS"):
+        validate_settings(
+            _settings(
+                app_env="production",
+                app_secret="a" * 40,
+                fernet_key=VALID_FERNET,
+                database_url="postgresql+psycopg2://codecare:codecare@localhost/codecare",
+                public_base_url="https://codecare.si",
+                api_cors_origins="https://codecare.si,https://www.codecare.si",
+            )
+        )
+
+
+def test_github_slug_accepts_a_url():
+    from codecare.config import normalize_github_app_slug
+
+    assert normalize_github_app_slug("https://github.com/apps/codecare-ai") == "codecare-ai"
+    assert normalize_github_app_slug("https://github.com/apps/codecare-ai/") == "codecare-ai"
+    assert normalize_github_app_slug("codecare-ai") == "codecare-ai"
+    assert normalize_github_app_slug("") == "codecare-ai"
 
 
 def test_safe_repo_path():

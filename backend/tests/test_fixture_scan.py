@@ -5,7 +5,7 @@ import pytest
 from codecare.services.sandbox import detect_commands, verify_patch
 from codecare.services.scanner import scan_local_directory
 
-FIXTURE = Path(__file__).resolve().parents[2] / "samples" / "maintenance-fixture"
+FIXTURE = Path(__file__).resolve().parents[1] / "samples" / "maintenance-fixture"
 
 
 @pytest.mark.asyncio

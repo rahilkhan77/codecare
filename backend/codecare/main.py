@@ -84,7 +84,16 @@ async def lifespan(app: FastAPI):
             pass
 
 
-app = FastAPI(title="CodeCare", version="0.2.0", lifespan=lifespan)
+_production = settings.app_env == "production"
+app = FastAPI(
+    title="CodeCare",
+    version="0.2.0",
+    lifespan=lifespan,
+    debug=False,
+    docs_url=None if _production else "/docs",
+    redoc_url=None if _production else "/redoc",
+    openapi_url=None if _production else "/openapi.json",
+)
 app.add_middleware(SecurityHeaders)
 app.add_middleware(PathRateLimit)
 app.add_middleware(CSRFMiddleware)
@@ -104,6 +113,14 @@ app.include_router(workspace.router)
 app.include_router(maintenance.router)
 app.include_router(billing.router)
 app.include_router(org.router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc: Exception):
+    log.exception("Unhandled error on %s", request.url.path)
+    if settings.app_env == "production":
+        return JSONResponse(status_code=500, content={"detail": "Something went wrong."})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
 
 @app.get("/health")

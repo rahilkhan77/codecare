@@ -14,17 +14,8 @@ COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend /app/backend
+COPY frontend /app/frontend
 COPY deploy/entrypoint.sh /entrypoint.sh
-COPY index.html app.js styles.css theme.css pages.css favicon.svg og-image.svg robots.txt sitemap.xml /app/
-COPY pricing /app/pricing
-COPY about /app/about
-COPY contact /app/contact
-COPY how-it-works /app/how-it-works
-COPY privacy-policy /app/privacy-policy
-COPY terms /app/terms
-COPY cookie-policy /app/cookie-policy
-COPY acceptable-use /app/acceptable-use
-COPY workspace /app/workspace
 
 RUN chmod 755 /entrypoint.sh \
     && chown -R codecare:codecare /app

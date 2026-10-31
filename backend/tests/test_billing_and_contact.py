@@ -8,7 +8,8 @@ def test_billing_disabled_without_dodo(client):
     assert plans.json()["currency"] == "USD"
     checkout = client.post("/api/v1/billing/checkout", json={"plan": "starter"})
     assert checkout.status_code == 503
-    assert "Dodo Payments" in checkout.json()["detail"]
+    assert checkout.json()["detail"] == "Billing is coming soon."
+    assert plans.json()["availability"] == "coming_soon"
 
 
 def test_contact_persists(client):

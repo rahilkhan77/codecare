@@ -1,10 +1,19 @@
 # CodeCare
 
-The original static marketing website still lives at the repository root. A FastAPI backend and `/workspace` product UI now sit beside it.
+```
+frontend/   marketing site and the /workspace app
+backend/    FastAPI app, Alembic, tests, sample fixture
+sandbox/    verification image
+deploy/     Compose files and Caddy
+docs/       product and operations docs
+scripts/    backup and live checks
+```
+
+Secrets belong in `backend/.env`, which is gitignored. Start from `.env.example`.
 
 ## Marketing site only
 
-From this folder in PowerShell, run:
+From `frontend/` in PowerShell, run:
 
 ```powershell
 py -m http.server 8765
@@ -16,7 +25,7 @@ Dark theme is the default for a first visit. The header toggle switches between 
 
 ## Full platform
 
-See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md).
+See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md).
 
 ```powershell
 cd backend

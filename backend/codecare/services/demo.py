@@ -30,7 +30,7 @@ from codecare.services.orgs import bootstrap_org
 DEMO_EMAIL = "demo@codecare.si"
 DEMO_PASSWORD = "demo-review-pass"
 SAMPLE = "[Sample]"
-FIXTURE = Path(__file__).resolve().parents[3] / "samples" / "maintenance-fixture"
+FIXTURE = Path(__file__).resolve().parents[2] / "samples" / "maintenance-fixture"
 SAMPLE_APP = "def add(left: int, right: int) -> int:\n    return left + right\n"
 
 

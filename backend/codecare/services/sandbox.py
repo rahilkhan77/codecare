@@ -147,6 +147,8 @@ def _docker_argv(
         network,
         "--memory",
         settings.sandbox_memory,
+        "--memory-swap",
+        settings.sandbox_memory,
         "--cpus",
         str(settings.sandbox_cpus),
         "--pids-limit",

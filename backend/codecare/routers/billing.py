@@ -58,7 +58,7 @@ PLAN_EVENTS = {"subscription.active", "subscription.renewed", "subscription.plan
 def _require_dodo():
     settings = get_settings()
     if not settings.dodo_configured:
-        raise HTTPException(status_code=503, detail="Billing is disabled until Dodo Payments credentials are configured.")
+        raise HTTPException(status_code=503, detail="Billing is coming soon.")
     return settings
 
 
@@ -101,7 +101,12 @@ def _apply_demo_plan(plan: str, auth: AuthContext, db: Session) -> dict:
 @router.get("/api/v1/billing/plans")
 def plans():
     settings = get_settings()
-    return {"checkout_enabled": settings.dodo_configured, "currency": "USD", "plans": PLANS}
+    return {
+        "checkout_enabled": settings.dodo_configured,
+        "availability": settings.billing_state,
+        "currency": "USD",
+        "plans": PLANS,
+    }
 
 
 @router.get("/api/v1/billing/status")
@@ -110,6 +115,7 @@ def status(auth: AuthContext = Depends(current_auth), db: Session = Depends(get_
     sub = db.scalar(select(Subscription).where(Subscription.organization_id == auth.organization_id))
     return {
         "checkout_enabled": settings.dodo_configured,
+        "availability": settings.billing_state,
         "demo_billing": settings.demo_mode,
         "currency": "USD",
         "provider": "dodo",

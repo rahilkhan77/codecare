@@ -21,6 +21,10 @@ PATH_LIMITS = (
     ("/api/v1/contact", 8, 60, {"POST"}),
     ("/api/v1/webhooks/github", 60, 60, {"POST"}),
     ("/api/v1/webhooks/dodo", 60, 60, {"POST"}),
+    ("/api/v1/billing/checkout", 10, 60, {"POST"}),
+    ("/api/v1/billing/change-plan", 10, 60, {"POST"}),
+    ("/api/v1/billing/portal", 10, 60, {"POST"}),
+    ("/api/v1/billing/cancel", 10, 60, {"POST"}),
     ("/api/v1/repos/", 20, 60, {"POST"}),
 )
 

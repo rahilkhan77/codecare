@@ -13,7 +13,7 @@ WEAK_SECRETS = {
 
 
 def validate_settings(settings: Settings) -> None:
-    if (settings.credentials_encryption_key or "").strip() or (settings.credentials_encryption_key_previous or "").strip():
+    if (settings.fernet_key or "").strip() or (settings.fernet_key_previous or "").strip():
         try:
             assert_encryption_configured(settings, required=False)
         except EncryptionConfigError as exc:
@@ -30,7 +30,7 @@ def validate_settings(settings: Settings) -> None:
         raise RuntimeError("SQLite is not supported in production. Set DATABASE_URL to PostgreSQL.")
     if not (settings.public_base_url or "").startswith("https://"):
         raise RuntimeError("PUBLIC_BASE_URL must use https in production.")
-    if "*" in settings.cors_origins:
-        raise RuntimeError("Wildcard CORS is not allowed in production.")
+    if settings.cors_origins != ["https://codecare.si"]:
+        raise RuntimeError("CORS must be limited to https://codecare.si in production.")
     if settings.demo_mode:
         raise RuntimeError("DEMO_MODE cannot be enabled in production.")

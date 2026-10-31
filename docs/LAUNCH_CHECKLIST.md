@@ -5,10 +5,10 @@ CodeCare maintains the apps a vibe coder already shipped. They pay one monthly f
 Do these on the server, in `.env`, then restart the API and worker.
 
 1. `APP_SECRET` — at least 32 random characters. Signs the session cookie.
-2. `CREDENTIALS_ENCRYPTION_KEY` — a Fernet key. Encrypts GitHub tokens.
+2. `FERNET_KEY` — a Fernet key in `backend/.env`. Encrypts GitHub tokens.
 3. `POSTGRES_PASSWORD` and `DATABASE_URL` — PostgreSQL. Compose builds the URL from the password.
 4. `PUBLIC_BASE_URL=https://codecare.si`
-5. `API_CORS_ORIGINS=https://codecare.si,https://www.codecare.si`
+5. `API_CORS_ORIGINS=https://codecare.si`
 6. `COOKIE_DOMAIN=.codecare.si`
 7. `APP_ENV=production` and `DEMO_MODE=false`
 8. GitHub App: `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, private key (`GITHUB_APP_PRIVATE_KEY` or `GITHUB_APP_PRIVATE_KEY_PATH`), `GITHUB_WEBHOOK_SECRET`.
@@ -30,7 +30,7 @@ Do these on the server, in `.env`, then restart the API and worker.
 12. Sandbox image on the worker host:
 
 ```bash
-docker compose -f docker-compose.prod.yml --profile sandbox build sandbox
+docker compose -f deploy/docker-compose.prod.yml --profile sandbox build sandbox
 ```
 
 Without that image, verification stays inconclusive and no pull request is opened.

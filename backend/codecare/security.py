@@ -17,6 +17,8 @@ from codecare.config import Settings, get_settings
 SECRET_PATTERN = re.compile(
     r"(?i)(api[_-]?key|secret|token|password|authorization|bearer)\s*[:=]\s*['\"]?[^\s'\"]{8,}"
 )
+BEARER_PATTERN = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]{8,}")
+URL_USERINFO_PATTERN = re.compile(r"://[^/\s:@]+:[^@\s/]+@")
 PEM_PATTERN = re.compile(r"-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+PRIVATE KEY-----")
 
 
@@ -104,7 +106,7 @@ def decode_supabase_token(token: str, settings: Settings | None = None) -> dict:
     return jwt.decode(token, settings.supabase_jwt_secret, algorithms=["HS256"], audience="authenticated")
 
 
-def parse_fernet_key(raw: str, name: str = "CREDENTIALS_ENCRYPTION_KEY") -> bytes:
+def parse_fernet_key(raw: str, name: str = "FERNET_KEY") -> bytes:
     value = (raw or "").strip()
     if not value:
         raise EncryptionConfigError(f"{name} is not set. Generate one with cryptography.fernet.Fernet.generate_key().")
@@ -120,20 +122,20 @@ def parse_fernet_key(raw: str, name: str = "CREDENTIALS_ENCRYPTION_KEY") -> byte
 
 def encryption_fernets(settings: Settings | None = None) -> list[Fernet]:
     settings = settings or get_settings()
-    fernets = [Fernet(parse_fernet_key(settings.credentials_encryption_key, "CREDENTIALS_ENCRYPTION_KEY"))]
-    previous = (settings.credentials_encryption_key_previous or "").strip()
+    fernets = [Fernet(parse_fernet_key(settings.fernet_key, "FERNET_KEY"))]
+    previous = (settings.fernet_key_previous or "").strip()
     if previous:
-        fernets.append(Fernet(parse_fernet_key(previous, "CREDENTIALS_ENCRYPTION_KEY_PREVIOUS")))
+        fernets.append(Fernet(parse_fernet_key(previous, "FERNET_KEY_PREVIOUS")))
     return fernets
 
 
 def assert_encryption_configured(settings: Settings, *, required: bool) -> None:
-    if required and not (settings.credentials_encryption_key or "").strip():
-        raise EncryptionConfigError("CREDENTIALS_ENCRYPTION_KEY is required in production.")
-    if (settings.credentials_encryption_key or "").strip():
-        parse_fernet_key(settings.credentials_encryption_key, "CREDENTIALS_ENCRYPTION_KEY")
-    if (settings.credentials_encryption_key_previous or "").strip():
-        parse_fernet_key(settings.credentials_encryption_key_previous, "CREDENTIALS_ENCRYPTION_KEY_PREVIOUS")
+    if required and not (settings.fernet_key or "").strip():
+        raise EncryptionConfigError("FERNET_KEY is required in production.")
+    if (settings.fernet_key or "").strip():
+        parse_fernet_key(settings.fernet_key, "FERNET_KEY")
+    if (settings.fernet_key_previous or "").strip():
+        parse_fernet_key(settings.fernet_key_previous, "FERNET_KEY_PREVIOUS")
 
 
 def encrypt_secret(value: str, settings: Settings | None = None) -> str:
@@ -215,4 +217,6 @@ def verify_standard_webhook(
 
 def redact(text: str) -> str:
     redacted = SECRET_PATTERN.sub("[redacted]", text or "")
+    redacted = BEARER_PATTERN.sub("Bearer [redacted]", redacted)
+    redacted = URL_USERINFO_PATTERN.sub("://[redacted]@", redacted)
     return PEM_PATTERN.sub("[redacted-private-key]", redacted)

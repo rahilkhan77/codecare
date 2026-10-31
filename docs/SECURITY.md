@@ -15,10 +15,10 @@
 
 ## Encryption at rest
 
-- `CREDENTIALS_ENCRYPTION_KEY` must be a Fernet key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
+- `FERNET_KEY` must be a Fernet key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
 - Production **does not** derive this key from `APP_SECRET`. Missing or invalid keys fail startup.
 - Invalid keys fail startup in every environment if the variable is set.
-- Rotation: set `CREDENTIALS_ENCRYPTION_KEY` to the new key and `CREDENTIALS_ENCRYPTION_KEY_PREVIOUS` to the old key. Decrypt tries current then previous. Re-encrypt stored tokens (`reencrypt_secret`) before removing the previous key.
+- Rotation: set `FERNET_KEY` to the new key and `FERNET_KEY_PREVIOUS` to the old key. Decrypt tries current then previous. Re-encrypt stored tokens (`reencrypt_secret`) before removing the previous key.
 
 ## GitHub credentials
 

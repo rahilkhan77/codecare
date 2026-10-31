@@ -22,7 +22,7 @@ The backend pytest suite is the verified surface. Live Docker image builds, live
 - Webhook HMAC, duplicate delivery, uninstall disconnect + OAuth wipe
 - OAuth expiry tracking, refresh handling, revoked/invalid rejection (mocked GitHub)
 - Fernet required in production; no `APP_SECRET` derivation; previous-key rotation
-- Local scan of `samples/maintenance-fixture`
+- Local scan of `backend/samples/maintenance-fixture`
 - Heuristic AI fallback that does **not** invent patches
 - Sandbox policy: patch-must-apply, pytest must collect and pass, secrets redacted in logs, timeouts not verified, `npm ci --ignore-scripts`, pip wheels-only
 - Workspace views read live API data
