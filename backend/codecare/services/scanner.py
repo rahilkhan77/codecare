@@ -27,6 +27,14 @@ SKIP_DIRS = {"node_modules", ".next", "dist", "build", "coverage", "vendor", ".g
 SKIP_FILES = {".env.example", ".env.sample", ".env.template"}
 SECRET_HINT = re.compile(r"(?i)(aws_secret_access_key|private_key|xox[baprs]-)['\"]?\s*[:=]\s*['\"][^'\"]{12,}")
 DYNAMIC_JS = re.compile(r"\beval\s*\(|\bnew\s+Function\s*\(")
+PY_STRING = re.compile(r"('''[\s\S]*?'''|\"\"\"[\s\S]*?\"\"\"|'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\")")
+JS_STRING = re.compile(r"(`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\")")
+
+
+def code_without_literals(content: str, *, javascript: bool = False) -> str:
+    """Drop comments and string literals so a mention of eval() is not treated as a call."""
+    without_comments = re.sub(r"(?m)//.*$" if javascript else r"(?m)#.*$", "", content)
+    return (JS_STRING if javascript else PY_STRING).sub("''", without_comments)
 KNOWN_PY = {"flask": "flask", "django": "django", "fastapi": "fastapi", "requests": "requests", "numpy": "numpy"}
 KNOWN_JS = {"react": "react", "next": "next", "express": "express", "lodash": "lodash", "axios": "axios"}
 PY_IMPORT = re.compile(r"^\s*(?:import|from)\s+([a-zA-Z0-9_]+)", re.M)
@@ -175,7 +183,7 @@ def static_findings(files: dict[str, str]) -> list[dict]:
     for path, content in files.items():
         if path.endswith(".py"):
             findings.extend(python_syntax_findings(path, content))
-            if "eval(" in content:
+            if "eval(" in code_without_literals(content):
                 findings.append(
                     {
                         "title": f"Use of eval() in {path}",
@@ -199,7 +207,7 @@ def static_findings(files: dict[str, str]) -> list[dict]:
                         }
                     )
         if path.endswith((".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx")):
-            if DYNAMIC_JS.search(content):
+            if DYNAMIC_JS.search(code_without_literals(content, javascript=True)):
                 findings.append(
                     {
                         "title": f"Dynamic code execution in {path}",

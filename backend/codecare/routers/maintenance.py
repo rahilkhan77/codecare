@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,10 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from codecare.db import get_db
-from codecare.deps import AuthContext, current_auth, org_scoped
+from codecare.deps import AuthContext, current_auth, org_scoped, require_roles
 from codecare.models import (
     DetectedIssue,
     FixProposal,
+    GithubInstallation,
     MaintenanceJob,
     PullRequestRecord,
     Repository,
@@ -18,7 +20,7 @@ from codecare.models import (
     VerificationRun,
     new_id,
 )
-from codecare.schemas import RepoScheduleUpdate
+from codecare.schemas import FixRequest, RepoScheduleUpdate
 from codecare.services.entitlements import assert_metric_quota
 from codecare.services.jobs import enqueue, has_active_job
 
@@ -35,6 +37,7 @@ def _repo(row: Repository) -> dict:
         "last_scanned_at": row.last_scanned_at.isoformat() if row.last_scanned_at else None,
         "private": row.private,
         "scan_interval_hours": row.scan_interval_hours,
+        "auto_merge": bool(row.auto_merge),
     }
 
 
@@ -61,7 +64,7 @@ def repo_detail(repo_id: str, auth: AuthContext = Depends(current_auth), db: Ses
 
 
 @router.post("/api/v1/repos/{repo_id}/scans")
-def trigger_scan(repo_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def trigger_scan(repo_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     repo = org_scoped(Repository, repo_id, auth, db)
     if not repo.connected:
         raise HTTPException(status_code=400, detail="Repository is disconnected")
@@ -75,10 +78,58 @@ def trigger_scan(repo_id: str, auth: AuthContext = Depends(current_auth), db: Se
     return {"scan_id": scan.id, "job_id": job.id, "status": "queued"}
 
 
+@router.post("/api/v1/repos/{repo_id}/requests")
+def request_fix(
+    repo_id: str,
+    payload: FixRequest,
+    auth: AuthContext = Depends(require_roles("owner", "admin")),
+    db: Session = Depends(get_db),
+):
+    repo = org_scoped(Repository, repo_id, auth, db)
+    if not repo.connected:
+        raise HTTPException(status_code=400, detail="Repository is disconnected")
+    description = payload.description.strip()
+    issue = DetectedIssue(
+        id=new_id(),
+        organization_id=auth.organization_id,
+        repository_id=repo.id,
+        fingerprint=hashlib.sha256(f"request|{repo.id}|{description}".encode()).hexdigest()[:32],
+        title=f"Requested fix: {description[:120]}",
+        category="request",
+        severity="medium",
+        status="open",
+        evidence=description,
+    )
+    db.add(issue)
+    db.commit()
+    from codecare.services.demo import is_sample_repo
+
+    installation = db.get(GithubInstallation, repo.installation_id) if repo.installation_id else None
+    usable = is_sample_repo(repo) or bool(
+        installation and not str(installation.installation_id).startswith(("pending-", "sample-", "revoked-"))
+    )
+    if not usable:
+        return {
+            "issue_id": issue.id,
+            "queued": False,
+            "detail": "The request is saved. Investigation starts after this app is connected to a configured GitHub App.",
+        }
+    job = enqueue(
+        db,
+        organization_id=auth.organization_id,
+        kind="diagnose",
+        repository_id=repo.id,
+        issue_id=issue.id,
+    )
+    return {"issue_id": issue.id, "queued": True, "job_id": job.id}
+
+
 @router.patch("/api/v1/repos/{repo_id}")
-def update_repo(repo_id: str, payload: RepoScheduleUpdate, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def update_repo(repo_id: str, payload: RepoScheduleUpdate, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     repo = org_scoped(Repository, repo_id, auth, db)
     repo.scan_interval_hours = payload.scan_interval_hours
+    if payload.auto_merge is not None:
+        repo.auto_merge = payload.auto_merge
     db.commit()
     return _repo(repo)
 
@@ -116,7 +167,7 @@ def issue_detail(issue_id: str, auth: AuthContext = Depends(current_auth), db: S
 
 
 @router.post("/api/v1/issues/{issue_id}/diagnose")
-def diagnose_issue(issue_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def diagnose_issue(issue_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     issue = org_scoped(DetectedIssue, issue_id, auth, db)
     assert_metric_quota(db, auth.organization_id, "ai_calls", "ai_per_day")
     job = enqueue(db, organization_id=auth.organization_id, kind="diagnose", repository_id=issue.repository_id, issue_id=issue.id)
@@ -124,7 +175,7 @@ def diagnose_issue(issue_id: str, auth: AuthContext = Depends(current_auth), db:
 
 
 @router.post("/api/v1/issues/{issue_id}/propose-fix")
-def propose(issue_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def propose(issue_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     issue = org_scoped(DetectedIssue, issue_id, auth, db)
     assert_metric_quota(db, auth.organization_id, "ai_calls", "ai_per_day")
     job = enqueue(db, organization_id=auth.organization_id, kind="propose_fix", repository_id=issue.repository_id, issue_id=issue.id)
@@ -139,7 +190,7 @@ def fix_detail(proposal_id: str, auth: AuthContext = Depends(current_auth), db: 
 
 
 @router.post("/api/v1/fixes/{proposal_id}/verify")
-def verify(proposal_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def verify(proposal_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     proposal = org_scoped(FixProposal, proposal_id, auth, db)
     job = enqueue(
         db,
@@ -153,7 +204,7 @@ def verify(proposal_id: str, auth: AuthContext = Depends(current_auth), db: Sess
 
 
 @router.post("/api/v1/fixes/{proposal_id}/pull-request")
-def open_pr(proposal_id: str, auth: AuthContext = Depends(current_auth), db: Session = Depends(get_db)):
+def open_pr(proposal_id: str, auth: AuthContext = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)):
     proposal = org_scoped(FixProposal, proposal_id, auth, db)
     latest = db.scalar(
         select(VerificationRun).where(VerificationRun.proposal_id == proposal.id).order_by(VerificationRun.created_at.desc())

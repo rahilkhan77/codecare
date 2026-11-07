@@ -1,3 +1,5 @@
+import asyncio
+
 from codecare.production import validate_settings
 from codecare.services.github import GitHubError, safe_repo_path
 from tests.conftest import register
@@ -25,7 +27,7 @@ def test_production_rejects_weak_secret():
     settings = Settings.model_construct(
         app_env="production",
         app_secret="dev-only-change-me",
-        credentials_encryption_key="",
+        fernet_key="",
         database_url="postgresql+psycopg2://codecare:codecare@localhost/codecare",
         api_cors_origins="http://127.0.0.1:8000",
     )
@@ -34,6 +36,25 @@ def test_production_rejects_weak_secret():
         assert False
     except RuntimeError as exc:
         assert "APP_SECRET" in str(exc)
+
+
+def test_production_error_response_hides_the_exception(monkeypatch):
+    from codecare.main import settings, unhandled_exception
+
+    monkeypatch.setattr(settings, "app_env", "production")
+
+    class Url:
+        path = "/api/v1/example"
+
+    class Req:
+        url = Url()
+
+    response = asyncio.run(unhandled_exception(Req(), RuntimeError("database password leaked")))
+    body = response.body.decode()
+    assert response.status_code == 500
+    assert "leaked" not in body
+    assert "Traceback" not in body
+    assert "Something went wrong." in body
 
 
 def test_readyz(client):

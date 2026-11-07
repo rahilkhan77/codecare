@@ -10,7 +10,10 @@ from codecare.models import Repository, Subscription, UsageRecord
 
 PLAN_LIMITS = {
     "none": {"repos": 1, "scans_per_day": 5, "ai_per_day": 3},
-    "starter": {"repos": 1, "scans_per_day": 20, "ai_per_day": 20},
+    "starter": {"repos": 1, "scans_per_day": 30, "ai_per_day": 30},
+    "indie": {"repos": 5, "scans_per_day": 200, "ai_per_day": 200},
+    "studio": {"repos": 10_000, "scans_per_day": 10_000, "ai_per_day": 10_000},
+    # Older subscription rows still resolve.
     "pro": {"repos": 5, "scans_per_day": 200, "ai_per_day": 200},
     "team": {"repos": 15, "scans_per_day": 1000, "ai_per_day": 1000},
     "enterprise": {"repos": 10_000, "scans_per_day": 10_000, "ai_per_day": 10_000},

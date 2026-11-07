@@ -156,15 +156,25 @@ async def _installation_token_for(db: Session, repo: Repository) -> str:
 
 
 async def _run_scan(db: Session, job: MaintenanceJob) -> None:
-    from codecare.services.scanner import scan_repository
+    from codecare.services.demo import SAMPLE, is_sample_repo
+    from codecare.services.scanner import scan_local_directory, scan_repository
 
     repo = db.get(Repository, job.repository_id)
     payload = json.loads(job.payload or "{}")
     scan = db.get(RepositoryScan, payload["scan_id"]) if payload.get("scan_id") else None
     if not scan:
         scan = db.scalar(select(RepositoryScan).where(RepositoryScan.repository_id == repo.id).order_by(RepositoryScan.created_at.desc()))
-    token = await _installation_token_for(db, repo)
-    result = await scan_repository(token, {"full_name": repo.full_name, "default_branch": repo.default_branch})
+    if is_sample_repo(repo):
+        from codecare.services.demo import FIXTURE
+
+        result = await scan_local_directory(FIXTURE, network=False)
+        result["commit_sha"] = "sample"
+        for finding in result["findings"]:
+            if not str(finding["title"]).startswith(SAMPLE):
+                finding["title"] = f"{SAMPLE} {finding['title']}"
+    else:
+        token = await _installation_token_for(db, repo)
+        result = await scan_repository(token, {"full_name": repo.full_name, "default_branch": repo.default_branch})
     if scan:
         scan.status = "completed"
         scan.languages = json.dumps(result["languages"])
@@ -228,10 +238,18 @@ async def _collect_context(token: str, repo: Repository, issue: DetectedIssue) -
 
 
 async def _run_diagnose(db: Session, job: MaintenanceJob) -> None:
+    from codecare.services.demo import is_sample_repo
+    from codecare.services.scanner import read_local_files
+
     issue = db.get(DetectedIssue, job.issue_id)
     repo = db.get(Repository, issue.repository_id)
-    token = await _installation_token_for(db, repo)
-    files = await _collect_context(token, repo, issue)
+    if is_sample_repo(repo):
+        from codecare.services.demo import FIXTURE
+
+        files = read_local_files(FIXTURE)
+    else:
+        token = await _installation_token_for(db, repo)
+        files = await _collect_context(token, repo, issue)
     listing = "\n".join(f"{path}:\n{content}" for path, content in files.items())
     provider, text, is_model = await diagnose(issue.title, issue.evidence, f"repo={repo.full_name}\n{listing}")
     prefix = "" if is_model else "HEURISTIC_ONLY. "
@@ -243,11 +261,20 @@ async def _run_diagnose(db: Session, job: MaintenanceJob) -> None:
 
 
 async def _run_fix(db: Session, job: MaintenanceJob) -> None:
+    from codecare.services.demo import SAMPLE_APP, is_sample_repo
+    from codecare.services.scanner import read_local_files
+
     issue = db.get(DetectedIssue, job.issue_id)
     repo = db.get(Repository, issue.repository_id)
-    token = await _installation_token_for(db, repo)
-    files = await _collect_context(token, repo, issue)
-    if issue.file_path and issue.file_path not in files:
+    if is_sample_repo(repo):
+        from codecare.services.demo import FIXTURE
+
+        files = read_local_files(FIXTURE)
+        token = ""
+    else:
+        token = await _installation_token_for(db, repo)
+        files = await _collect_context(token, repo, issue)
+    if issue.file_path and issue.file_path not in files and token:
         try:
             content = await gh.get_file(token, repo.full_name, issue.file_path, repo.default_branch)
             if content:
@@ -255,6 +282,11 @@ async def _run_fix(db: Session, job: MaintenanceJob) -> None:
         except gh.GitHubError:
             pass
     provider, summary, proposed, is_model = await propose_fix(issue.title, issue.evidence, files)
+    if is_sample_repo(repo) and not proposed and "eval" in f"{issue.title} {issue.evidence} {issue.file_path}".lower():
+        provider = "sample"
+        summary = "[Sample] Replaced eval() with addition. A hosted model was not called."
+        proposed = {"app.py": SAMPLE_APP}
+        is_model = False
     proposal = FixProposal(
         id=new_id(),
         organization_id=repo.organization_id,
@@ -283,7 +315,8 @@ async def _run_verify(db: Session, job: MaintenanceJob) -> None:
     repo = db.get(Repository, proposal.repository_id)
     work = Path(tempfile.mkdtemp(prefix="codecare-verify-"))
     try:
-        token = await _installation_token_for(db, repo)
+        from codecare.services.demo import FIXTURE, is_sample_repo
+
         if not files:
             result = {
                 "status": "inconclusive",
@@ -291,7 +324,11 @@ async def _run_verify(db: Session, job: MaintenanceJob) -> None:
                 "tests_passed": None,
                 "tests_failed": None,
             }
+        elif is_sample_repo(repo):
+            shutil.copytree(FIXTURE, work, dirs_exist_ok=True)
+            result = verify_patch(files, work_dir=work)
         else:
+            token = await _installation_token_for(db, repo)
             await gh.download_tarball(token, repo.full_name, repo.default_branch, work)
             result = verify_patch(files, work_dir=work)
     finally:
@@ -322,8 +359,34 @@ async def _run_pr(db: Session, job: MaintenanceJob) -> None:
         .order_by(VerificationRun.created_at.desc())
     )
     if not latest or latest.status != "verified":
-        raise RuntimeError("A GitHub pull request is only created after a verified sandbox run.")
+        raise RuntimeError("A pull request is only created after a verified sandbox run.")
     repo = db.get(Repository, proposal.repository_id)
+    from codecare.services.demo import is_sample_repo
+
+    if is_sample_repo(repo):
+        status = "merged" if repo.auto_merge else "open"
+        record = PullRequestRecord(
+            id=new_id(),
+            organization_id=repo.organization_id,
+            repository_id=repo.id,
+            proposal_id=proposal.id,
+            verification_id=latest.id,
+            number=1,
+            url="https://github.com/sample/maintenance-fixture/pull/1",
+            title=f"[Sample] {proposal.summary[:80]}",
+            status=status,
+        )
+        db.add(record)
+        proposal.status = "pr_opened"
+        note = (
+            "[Sample] Auto-merge recorded locally because verification passed and this app opted in. GitHub was not contacted."
+            if status == "merged"
+            else "[Sample] Pull request recorded locally. GitHub was not contacted. Auto-merge is off."
+        )
+        notify(db, repo.organization_id, "Sample pull request", note)
+        job.result = json.dumps({"pull_request_id": record.id, "url": record.url, "status": status, "sample": True})
+        db.commit()
+        return
     files = json.loads(proposal.patch or "{}")
     if not files:
         raise RuntimeError("Proposal contains no files to commit.")
@@ -344,14 +407,30 @@ async def _run_pr(db: Session, job: MaintenanceJob) -> None:
         message=f"fix: {proposal.summary[:70]}",
         files=files,
     )
+    auto_note = (
+        "Auto-merge is enabled for this app. CodeCare will merge only if GitHub accepts the merge after verification."
+        if repo.auto_merge
+        else "Auto-merge is off. Review and merge this pull request yourself."
+    )
     pr = await gh.create_pull_request(
         token,
         repo.full_name,
         title=f"CodeCare: {proposal.summary[:70]}",
-        body="Proposed by CodeCare after an isolated verification run. Review before merging. CodeCare will not merge this pull request.",
+        body=f"Proposed by CodeCare after an isolated verification run.\n\n{auto_note}",
         head=branch,
         base=meta.get("default_branch") or repo.default_branch,
     )
+    status = "open"
+    merge_error = ""
+    if repo.auto_merge and pr.get("number"):
+        try:
+            merged = await gh.merge_pull_request(token, repo.full_name, int(pr["number"]))
+            if merged.get("merged"):
+                status = "merged"
+            else:
+                merge_error = merged.get("message") or "GitHub did not merge the pull request."
+        except Exception as exc:
+            merge_error = redact(str(exc))
     record = PullRequestRecord(
         id=new_id(),
         organization_id=repo.organization_id,
@@ -361,10 +440,11 @@ async def _run_pr(db: Session, job: MaintenanceJob) -> None:
         number=pr.get("number"),
         url=pr.get("html_url") or "",
         title=pr.get("title") or "",
-        status="open",
+        status=status,
     )
     db.add(record)
     proposal.status = "pr_opened"
-    notify(db, repo.organization_id, "Pull request opened", record.url)
-    job.result = json.dumps({"pull_request_id": record.id, "url": record.url})
+    notice = record.url if not merge_error else f"{record.url} Auto-merge did not complete: {merge_error}"
+    notify(db, repo.organization_id, "Pull request merged" if status == "merged" else "Pull request opened", notice)
+    job.result = json.dumps({"pull_request_id": record.id, "url": record.url, "status": status, "merge_error": merge_error})
     db.commit()

@@ -3,9 +3,25 @@ from pathlib import Path
 import pytest
 
 from codecare.services.sandbox import detect_commands, verify_patch
-from codecare.services.scanner import scan_local_directory
+from codecare.services.scanner import scan_files, scan_local_directory
 
-FIXTURE = Path(__file__).resolve().parents[2] / "samples" / "maintenance-fixture"
+FIXTURE = Path(__file__).resolve().parents[1] / "samples" / "maintenance-fixture"
+
+
+@pytest.mark.asyncio
+async def test_eval_inside_a_string_is_not_a_call():
+    mentioned = await scan_files(
+        {"scanner.py": 'if "eval(" in content:\n    return None\n'},
+        full_name="local/scanner",
+        network=False,
+    )
+    called = await scan_files(
+        {"app.py": "def run(value):\n    return eval(value)\n"},
+        full_name="local/app",
+        network=False,
+    )
+    assert not any("eval" in item["title"].lower() for item in mentioned["findings"])
+    assert any("eval" in item["title"].lower() for item in called["findings"])
 
 
 @pytest.mark.asyncio

@@ -6,9 +6,31 @@ from codecare.services.sandbox import FORBIDDEN_HOST_EXEC, INSTALL_COMMANDS, app
 
 def test_sandbox_does_not_run_on_host(tmp_path, monkeypatch):
     monkeypatch.setattr("codecare.services.sandbox.docker_available", lambda: False)
-    result = verify_patch({"app.py": "print('hi')"})
+    marker = tmp_path / "pwned"
+    payload = f"open({str(marker)!r}, 'w').write('ran')\n"
+    result = verify_patch({"app.py": payload})
+    assert result["status"] == "limited"
+    assert result["status"] != "verified"
+    assert "LIMITED VERIFICATION" in result["log"]
+    assert FORBIDDEN_HOST_EXEC in result["log"]
+    assert not marker.exists()
+
+
+def test_static_python_syntax_error_is_not_verified(monkeypatch):
+    monkeypatch.setattr("codecare.services.sandbox.docker_available", lambda: False)
+    result = verify_patch({"app.py": "def (\n"})
+    assert result["status"] == "failed"
+    assert result["status"] != "verified"
+
+
+def test_remote_sandbox_does_not_send_code(monkeypatch):
+    from codecare.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "sandbox_mode", "remote")
+    monkeypatch.setattr(get_settings(), "sandbox_remote_url", "https://sandbox.example")
+    result = verify_patch({"app.py": "print('hi')\n"})
     assert result["status"] == "inconclusive"
-    assert "Docker" in result["log"]
+    assert "not implemented" in result["log"].lower()
     assert FORBIDDEN_HOST_EXEC in result["log"]
 
 

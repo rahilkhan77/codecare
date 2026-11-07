@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-from codecare.config import REPO_ROOT
+from codecare.config import FRONTEND_ROOT
 
 ALLOWED_ROOT = {
     "index.html",
@@ -35,11 +35,11 @@ ALLOWED_DIRS = {
 def safe_file(full_path: str) -> Path:
     cleaned = full_path.strip("/")
     if not cleaned:
-        return REPO_ROOT / "index.html"
-    candidate = (REPO_ROOT / cleaned).resolve()
-    if REPO_ROOT.resolve() not in candidate.parents and candidate != REPO_ROOT.resolve():
+        return FRONTEND_ROOT / "index.html"
+    candidate = (FRONTEND_ROOT / cleaned).resolve()
+    if FRONTEND_ROOT.resolve() not in candidate.parents and candidate != FRONTEND_ROOT.resolve():
         raise HTTPException(status_code=404, detail="Not found")
-    relative = candidate.relative_to(REPO_ROOT.resolve()).as_posix()
+    relative = candidate.relative_to(FRONTEND_ROOT.resolve()).as_posix()
     if relative in ALLOWED_ROOT:
         return candidate
     top = relative.split("/", 1)[0]
@@ -54,4 +54,5 @@ def safe_file(full_path: str) -> Path:
 
 def file_response(full_path: str) -> FileResponse:
     path = safe_file(full_path)
-    return FileResponse(path)
+    cache = "public, max-age=86400" if path.suffix in {".css", ".js", ".svg", ".png", ".webp", ".ico"} else "no-cache"
+    return FileResponse(path, headers={"Cache-Control": cache})

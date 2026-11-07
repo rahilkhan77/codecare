@@ -25,7 +25,10 @@ class Profile(Base):
     full_name: Mapped[str] = mapped_column(String(200), default="")
     avatar_url: Mapped[str] = mapped_column(String(500), default="")
     supabase_user_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    github_user_id: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -92,6 +95,7 @@ class Repository(Base):
     health_status: Mapped[str] = mapped_column(String(32), default="unknown")
     last_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scan_interval_hours: Mapped[int] = mapped_column(Integer, default=24)
+    auto_merge: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -211,8 +215,9 @@ class Subscription(Base):
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), unique=True)
     plan: Mapped[str] = mapped_column(String(32), default="none")
     status: Mapped[str] = mapped_column(String(32), default="inactive")
-    stripe_customer_id: Mapped[str] = mapped_column(String(64), default="")
-    stripe_subscription_id: Mapped[str] = mapped_column(String(64), default="")
+    dodo_customer_id: Mapped[str] = mapped_column(String(128), default="")
+    dodo_subscription_id: Mapped[str] = mapped_column(String(128), default="")
+    cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False)
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -253,6 +258,15 @@ class GithubWebhookEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class DodoWebhookEvent(Base):
+    __tablename__ = "dodo_webhook_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    event_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    event: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ContactMessage(Base):
     __tablename__ = "contact_messages"
 
@@ -269,6 +283,44 @@ class OauthState(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     state: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"))
-    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    purpose: Mapped[str] = mapped_column(String(32), default="connect")
+    profile_id: Mapped[str | None] = mapped_column(ForeignKey("profiles.id"), nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthToken(Base):
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True)
+    purpose: Mapped[str] = mapped_column(String(32))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OrganizationInvite(Base):
+    __tablename__ = "organization_invites"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    role: Mapped[str] = mapped_column(String(32), default="member")
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    invited_by: Mapped[str] = mapped_column(ForeignKey("profiles.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

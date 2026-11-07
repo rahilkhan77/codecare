@@ -6,10 +6,11 @@ Live repository access does not work until this App exists and the environment v
 
 1. GitHub → Settings → Developer settings → GitHub Apps → **New GitHub App**.
 2. GitHub App name: something unique, for example `codecare-<yourname>`.
-3. Homepage URL: your `PUBLIC_BASE_URL` (local: `http://127.0.0.1:8000`).
-4. Callback URL: `{PUBLIC_BASE_URL}/api/v1/github/oauth/callback`
-5. Setup URL: `{PUBLIC_BASE_URL}/api/v1/github/setup`
-6. Webhook URL: `{PUBLIC_BASE_URL}/api/v1/webhooks/github`
+3. Homepage URL: `https://codecare.si` (local trials can use `http://127.0.0.1:8000`).
+4. Callback URL: `https://codecare.si/api/v1/github/oauth/callback`  
+   Sign-in and "Connect GitHub identity" share this callback. The `state` record distinguishes them. Local equivalent: `http://127.0.0.1:8000/api/v1/github/oauth/callback`.
+5. Setup URL: `https://codecare.si/api/v1/github/setup`
+6. Webhook URL: `https://codecare.si/api/v1/webhooks/github`
 7. Webhook secret: a long random string (store as `GITHUB_WEBHOOK_SECRET`).
 8. Leave **Expire user authorization tokens** enabled so GitHub issues a refresh token. CodeCare stores expiry, refreshes before use, and will not use an expired access token. Installation tokens remain short-lived and minted per request.
 
